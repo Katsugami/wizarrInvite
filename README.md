@@ -1,64 +1,68 @@
 # wizarrInvite – Organizr Plugin
 
-Plugin Organizr permettant de **générer et afficher automatiquement des invitations Wizarr** directement depuis Organizr.
+wizarrInvite is an Organizr plugin that allows you to **generate and manage Wizarr invitation links directly from Organizr**.
 
-Ce plugin permet de simplifier la distribution d’accès à votre serveur multimédia en utilisant Wizarr et un système d’invitation automatisé.
+The plugin can automatically create invitation codes, verify them, and recreate them if the configuration changes.
 
----
-
-# Fonctionnalités
-
-* Génération **manuelle** d'invitations Wizarr
-* Génération **automatique** d’invitations
-* Vérification automatique de la validité du code
-* Recréation automatique si les paramètres changent
-* Sélection des **serveurs et bibliothèques**
-* Gestion des autorisations :
-
-  * TV en direct
-  * téléchargements
-  * uploads mobiles
-* Page **Display personnalisée**
-
-  * Français
-  * Anglais
-  * Espagnol
-* Compatible avec la traduction automatique Organizr
+This makes it easier to share controlled access to your media server through Wizarr.
 
 ---
 
-# Fonctionnement du mode automatique
+# Features
 
-Lorsque la page **Display** est chargée :
+* Manual Wizarr invitation creation
+* Automatic invitation generation
+* Automatic invitation validation check
+* Automatic regeneration if parameters change
+* Server selection
+* Library selection
+* Permission management:
 
-1. Le plugin vérifie si une invitation Wizarr existe
-2. Le plugin compare les paramètres configurés avec ceux du code existant
-3. Si un paramètre a changé :
+  * Live TV access
+  * Downloads
+  * Mobile uploads
+* Public invitation display page
+* Multi-language display support:
 
-   * l'ancien code est supprimé
-   * un nouveau code est créé automatiquement
+  * French
+  * English
+  * Spanish
+* Compatible with Organizr auto-translation
 
-Paramètres vérifiés :
+---
 
-* durée d'accès
-* expiration du code
-* accès TV live
-* téléchargement autorisé
-* upload mobile autorisé
-* serveurs sélectionnés
-* bibliothèques sélectionnées
+# Automatic Invitation Mode
+
+When the **Display page is loaded**, the plugin performs the following checks:
+
+1. Verify if an invitation already exists
+2. Compare the existing invitation parameters with the configured settings
+3. If the parameters do not match:
+
+   * the existing invitation is deleted
+   * a new invitation is automatically created
+
+Parameters checked include:
+
+* access duration
+* invitation expiration
+* Live TV permission
+* download permission
+* mobile upload permission
+* selected servers
+* selected libraries
 
 ---
 
 # Installation
 
-1. Télécharger ou cloner ce dépôt dans :
+Download or clone this repository into the Organizr plugins directory:
 
 ```
 Organizr/api/plugins/wizarrInvite
 ```
 
-2. Vérifier que les fichiers sont présents :
+Required files:
 
 ```
 plugin.php
@@ -73,9 +77,9 @@ display-es.php
 logo.png
 ```
 
-3. Redémarrer Organizr si nécessaire.
+Restart Organizr if necessary.
 
-4. Le plugin apparaîtra dans :
+The plugin will appear in:
 
 ```
 Settings → Plugins
@@ -85,67 +89,68 @@ Settings → Plugins
 
 # Configuration
 
-Dans les paramètres du plugin :
+In the plugin settings panel you can configure:
 
-### Connexion Wizarr
+### Wizarr Connection
 
-Configurer l’URL de votre serveur Wizarr et votre clé API.
+* Wizarr server URL
+* Wizarr API key
 
-### Invitation manuelle
+### Manual Invitation
 
-Permet de générer un code à la demande.
+Create a Wizarr invitation code manually.
 
-### Invitation automatique
+### Automatic Invitation
 
-Permet de générer un code automatiquement avec :
+Automatically maintain a valid invitation code with configurable settings:
 
-* durée d'accès
-* expiration
-* serveurs
-* bibliothèques
+* access duration
+* expiration time
+* servers
+* libraries
 * permissions
 
-### Display
+### Display Page
 
-Permet d'afficher la page publique contenant l’invitation.
-
----
-
-# Utilisation du Display
-
-La page display peut être utilisée pour partager une invitation publique :
+Public invitation display pages are available:
 
 ```
-https://votre-organizr/api/plugins/wizarrInvite/display-fr.php
-```
-
-ou
-
-```
+display-fr.php
 display-en.php
 display-es.php
 ```
 
-Lorsque la page est chargée :
+Example:
 
-* le plugin vérifie si un code est valide
-* sinon un nouveau code est créé automatiquement
+```
+https://your-organizr/api/plugins/wizarrInvite/display-en.php
+```
+
+When the page loads:
+
+* the plugin checks if a valid invitation exists
+* if not, a new one is created automatically
 
 ---
 
-# Compatibilité
+# Compatibility
 
 * Organizr v2
 * Wizarr API
 
 ---
 
-# Auteur
+# Authors
 
 Katsugami
 
+AI development assistance: ChatGPT
+
+Most of the code for this plugin was generated with the help of ChatGPT.
+The project structure, integration, testing, and final assembly were performed by Katsugami.
+
 ---
 
-# Licence
+# License
 
-Projet personnel.
+Personal project.
