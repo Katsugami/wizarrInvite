@@ -8,6 +8,34 @@ This makes it easier to share controlled access to your media server through Wiz
 
 ---
 
+# Recommended Installation (Marketplace)
+
+The easiest way to install this plugin is through the **custom Organizr marketplace repository**.
+
+Repository:
+
+https://github.com/Katsugami/Organizr-Plugins
+
+### Add the repository to Organizr
+
+Open Organizr and go to:
+
+Settings → Plugins → Settings → Marketplace
+
+Then in **External Marketplace Repo**, add:
+
+```
+https://github.com/Katsugami/Organizr-Plugins
+```
+
+After saving, go to:
+
+Plugins → Marketplace
+
+The **wizarrInvite plugin will appear and can be installed directly from Organizr.**
+
+---
+
 # Features
 
 * Manual Wizarr invitation creation
@@ -54,9 +82,9 @@ Parameters checked include:
 
 ---
 
-# Installation
+# Manual Installation
 
-Download or clone this repository into the Organizr plugins directory:
+If you prefer manual installation, download or clone this repository into the Organizr plugins directory:
 
 ```
 Organizr/api/plugins/wizarrInvite
@@ -129,7 +157,7 @@ https://your-organizr/api/plugins/wizarrInvite/display-en.php
 When the page loads:
 
 * the plugin checks if a valid invitation exists
-* if not, a new one is created automatically
+* if not, a new invitation is created automatically
 
 ---
 
