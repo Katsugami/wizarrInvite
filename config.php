@@ -8,7 +8,7 @@ return [
 	'WIZARRINVITE-public-url' => '',
 	'WIZARRINVITE-min-group' => '4',
 
-	'WIZARRINVITE-display-custom-file' => 'display-fr',
+	'WIZARRINVITE-display-custom-file' => 'display-en',
 
 	'WIZARRINVITE-manual-expiration' => '1',
 	'WIZARRINVITE-manual-access-days' => '7',
