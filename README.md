@@ -1,5 +1,13 @@
 # wizarrInvite – Organizr Plugin
 
+<p align="center">
+<img src="logo.png" width="140">
+</p>
+
+<p align="center">
+<img src="preview.png" width="900">
+</p>
+
 wizarrInvite is an Organizr plugin that allows you to **generate and manage Wizarr invitation links directly from Organizr**.
 
 The plugin can automatically create invitation codes, verify them, and recreate them if the configuration changes.
@@ -28,9 +36,13 @@ Then in **External Marketplace Repo**, add:
 https://github.com/Katsugami/Organizr-Plugins
 ```
 
-After saving, go to:
+Save the settings.
 
+After that go to:
+
+```
 Plugins → Marketplace
+```
 
 The **wizarrInvite plugin will appear and can be installed directly from Organizr.**
 
@@ -103,6 +115,7 @@ display-fr.php
 display-en.php
 display-es.php
 logo.png
+preview.png
 ```
 
 Restart Organizr if necessary.
