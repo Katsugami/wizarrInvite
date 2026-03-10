@@ -6,7 +6,7 @@ return [
 	'WIZARRINVITE-url' => '',
 	'WIZARRINVITE-api-key' => '',
 	'WIZARRINVITE-public-url' => '',
-	'WIZARRINVITE-min-group' => '4',
+	'WIZARRINVITE-min-group' => '2',
 
 	'WIZARRINVITE-display-custom-file' => 'display-en',
 
@@ -28,4 +28,5 @@ return [
 	'WIZARRINVITE-auto-allow-live-tv' => false,
 	'WIZARRINVITE-auto-allow-mobile-uploads' => false
 ];
+
 
