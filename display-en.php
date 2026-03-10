@@ -348,8 +348,8 @@ body{
 		<div class="left">
 			<div class="left-inner">
 				<div class="logo-box">
-					<img class="logo" src="/data/plugins/wizarrInvite/logo.png"
-						onerror="this.onerror=null;this.src=`/api/plugins/wizarrInvite/logo.png`;">
+					<img class="logo" src="/data/plugins/wizarrInvite/wizarr.png"
+						onerror="this.onerror=null;this.src=`/api/plugins/wizarrInvite/wizarr.png`;">
 				</div>
 
 				<div class="brand">
