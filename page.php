@@ -24,10 +24,10 @@ function get_page_wizarrinvite($Organizr)
 			<div class="col-md-10 col-md-offset-1">
 				<div class="panel panel-default" style="margin-top:20px;">
 					<div class="panel-heading">
-						<h3 class="panel-title">Invitation Wizarr</h3>
+						<h3 class="panel-title">Wizarr Invitation</h3>
 					</div>
 					<div class="panel-body">
-						<div id="wizarrinvite-app">Chargement...</div>
+						<div id="wizarrinvite-app">Loading...</div>
 					</div>
 				</div>
 			</div>

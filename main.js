@@ -3,12 +3,12 @@ function wizarrInviteRender(data) {
 
 	let html = '';
 	html += '<div class="panel panel-info">';
-	html += '<div class="panel-heading"><strong>Code automatique actif</strong></div>';
+	html += '<div class="panel-heading"><strong>Automatic code active</strong></div>';
 	html += '<div class="panel-body">';
-	html += '<p><strong>Code :</strong> ' + (data.code || '-') + '</p>';
-	html += '<p><strong>Lien :</strong> <a href="' + (data.url || '#') + '" target="_blank">' + (data.url || '-') + '</a></p>';
-	html += '<p><strong>Expire :</strong> ' + (data.expires || '-') + '</p>';
-	html += '<p><strong>Accès :</strong> ' + (data.access_days || 7) + ' jour(s)</p>';
+	html += '<p><strong>Code:</strong> ' + (data.code || '-') + '</p>';
+	html += '<p><strong>Link:</strong> <a href="' + (data.url || '#') + '" target="_blank">' + (data.url || '-') + '</a></p>';
+	html += '<p><strong>Expires:</strong> ' + (data.expires || '-') + '</p>';
+	html += '<p><strong>Access:</strong> ' + (data.access_days || 7) + ' day(s)</p>';
 	html += '</div>';
 	html += '</div>';
 
@@ -28,16 +28,16 @@ function wizarrInviteLoadCurrent() {
 		cache: false
 	}).done(function (res) {
 		if (!res || !res.response) {
-			wizarrInviteRenderError('Réponse invalide');
+			wizarrInviteRenderError('Invalid response');
 			return;
 		}
 		if (res.response.result === 'error') {
-			wizarrInviteRenderError(res.response.message || 'Erreur');
+			wizarrInviteRenderError(res.response.message || 'Error');
 			return;
 		}
 		wizarrInviteRender(res.response.data || {});
 	}).fail(function () {
-		wizarrInviteRenderError('Impossible de charger le code');
+		wizarrInviteRenderError('Unable to load the code');
 	});
 }
 

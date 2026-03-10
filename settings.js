@@ -52,13 +52,13 @@ function wizarrinviteRenderSelector(prefix, servers, libraries) {
 
 		html += '<div style="border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:16px;">';
 		html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">';
-		html += '<div><div style="font-size:20px; font-weight:700;">' + (server.name || ('Serveur ' + sid)) + '</div><div style="opacity:.8;">' + (server.server_type || '') + '</div></div>';
+		html += '<div><div style="font-size:20px; font-weight:700;">' + (server.name || ('Server ' + sid)) + '</div><div style="opacity:.8;">' + (server.server_type || '') + '</div></div>';
 		html += '<label style="display:flex; align-items:center; gap:8px; margin:0;">';
-		html += '<input class="wizarrinvite-server-checkbox" data-prefix="' + prefix + '" type="checkbox" value="' + sid + '" data-server-name="' + (server.name || ('Serveur ' + sid)) + '" ' + checkedServer + '>';
-		html += '<span>Utiliser ce serveur</span></label></div>';
+		html += '<input class="wizarrinvite-server-checkbox" data-prefix="' + prefix + '" type="checkbox" value="' + sid + '" data-server-name="' + (server.name || ('Server ' + sid)) + '" ' + checkedServer + '>';
+		html += '<span>Use this server</span></label></div>';
 
 		if (!libs.length) {
-			html += '<div style="opacity:.8;">Aucune bibliothèque trouvée pour ce serveur.</div>';
+			html += '<div style="opacity:.8;">No libraries found for this server.</div>';
 		} else {
 			html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px;">';
 			libs.forEach(function (lib) {
@@ -106,7 +106,7 @@ function wizarrinviteSyncSelection(prefix) {
 
 function wizarrinviteLoadSelector(prefix) {
 	const container = $('#wizarrinvite-' + prefix + '-selector');
-	container.html('<div>Chargement des serveurs et bibliothèques...</div>');
+	container.html('<div>Loading servers and libraries...</div>');
 
 	$.when(
 		$.ajax({ url: 'api/v2/plugins/wizarrinvite/servers', method: 'GET', dataType: 'json', cache: false }),
@@ -116,11 +116,11 @@ function wizarrinviteLoadSelector(prefix) {
 		const libsPayload = libsRes[0];
 
 		if (!serversPayload || !serversPayload.response || serversPayload.response.result !== 'success') {
-			container.html('<span style="color:red;">Impossible de charger les serveurs</span>');
+			container.html('<span style="color:red;">Unable to load servers</span>');
 			return;
 		}
 		if (!libsPayload || !libsPayload.response || libsPayload.response.result !== 'success') {
-			container.html('<span style="color:red;">Impossible de charger les bibliothèques</span>');
+			container.html('<span style="color:red;">Unable to load libraries</span>');
 			return;
 		}
 
@@ -129,7 +129,7 @@ function wizarrinviteLoadSelector(prefix) {
 
 		wizarrinviteRenderSelector(prefix, servers, libraries);
 	}).fail(function () {
-		container.html('<span style="color:red;">Impossible de charger les serveurs et bibliothèques</span>');
+		container.html('<span style="color:red;">Unable to load servers and libraries</span>');
 	});
 }
 
@@ -137,7 +137,7 @@ $(document).off('click.wizarrinvite', '#wizarrinvite-test-btn');
 $(document).on('click.wizarrinvite', '#wizarrinvite-test-btn', function (e) {
 	e.preventDefault();
 	const $r = $('#wizarrinvite-test-result');
-	$r.html('Test en cours...');
+	$r.html('Test in progress...');
 
 	$.ajax({
 		url: 'api/v2/plugins/wizarrinvite/test',
@@ -146,7 +146,7 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-test-btn', function (e) {
 		cache: false
 	}).done(function (res) {
 		if (!res || !res.response) {
-			$r.html('<span style="color:red;">Réponse invalide</span>');
+			$r.html('<span style="color:red;">Invalid response</span>');
 			return;
 		}
 		$r.html(
@@ -155,7 +155,7 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-test-btn', function (e) {
 				: '<span style="color:red;">' + res.response.message + '</span>'
 		);
 	}).fail(function () {
-		$r.html('<span style="color:red;">Impossible de lancer le test</span>');
+		$r.html('<span style="color:red;">Unable to start the test</span>');
 	});
 
 	return false;
@@ -202,7 +202,7 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-create-manual-btn', function
 	wizarrinviteSyncSelection('manual');
 
 	const $r = $('#wizarrinvite-manual-result');
-	$r.html('Création manuelle en cours...');
+	$r.html('Manual creation in progress...');
 
 	$.ajax({
 		url: 'api/v2/plugins/wizarrinvite/create-manual',
@@ -211,21 +211,21 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-create-manual-btn', function
 		cache: false
 	}).done(function (res) {
 		if (!res || !res.response) {
-			$r.html('<span style="color:red;">Réponse invalide</span>');
+			$r.html('<span style="color:red;">Invalid response</span>');
 			return;
 		}
 		if (res.response.result === 'success') {
 			const d = res.response.data || {};
 			$r.html(
-				'<div style="color:lime; margin-bottom:8px;">Invitation manuelle créée</div>' +
-				'<div><strong>Code :</strong> ' + (d.code || '-') + '</div>' +
-				'<div><strong>URL :</strong> ' + (d.url || '-') + '</div>'
+				'<div style="color:lime; margin-bottom:8px;">Manual invitation created</div>' +
+				'<div><strong>Code:</strong> ' + (d.code || '-') + '</div>' +
+				'<div><strong>URL:</strong> ' + (d.url || '-') + '</div>'
 			);
 		} else {
-			$r.html('<span style="color:red;">' + (res.response.message || 'Erreur') + '</span>');
+			$r.html('<span style="color:red;">' + (res.response.message || 'Error') + '</span>');
 		}
 	}).fail(function () {
-		$r.html('<span style="color:red;">Impossible de créer l’invitation manuelle</span>');
+		$r.html('<span style="color:red;">Unable to create the manual invitation</span>');
 	});
 
 	return false;
@@ -237,7 +237,7 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-check-auto-btn', function (e
 	wizarrinviteSyncSelection('auto');
 
 	const $r = $('#wizarrinvite-auto-result');
-	$r.html('Vérification du code automatique...');
+	$r.html('Checking automatic code...');
 
 	$.ajax({
 		url: 'api/v2/plugins/wizarrinvite/current',
@@ -246,21 +246,21 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-check-auto-btn', function (e
 		cache: false
 	}).done(function (res) {
 		if (!res || !res.response) {
-			$r.html('<span style="color:red;">Réponse invalide</span>');
+			$r.html('<span style="color:red;">Invalid response</span>');
 			return;
 		}
 		if (res.response.result === 'success') {
 			const d = res.response.data || {};
 			$r.html(
-				'<div style="color:lime; margin-bottom:8px;">Code automatique prêt</div>' +
-				'<div><strong>Code :</strong> ' + (d.code || '-') + '</div>' +
-				'<div><strong>URL :</strong> ' + (d.url || '-') + '</div>'
+				'<div style="color:lime; margin-bottom:8px;">Automatic code ready</div>' +
+				'<div><strong>Code:</strong> ' + (d.code || '-') + '</div>' +
+				'<div><strong>URL:</strong> ' + (d.url || '-') + '</div>'
 			);
 		} else {
-			$r.html('<span style="color:red;">' + (res.response.message || 'Erreur') + '</span>');
+			$r.html('<span style="color:red;">' + (res.response.message || 'Error') + '</span>');
 		}
 	}).fail(function () {
-		$r.html('<span style="color:red;">Impossible de vérifier le code automatique</span>');
+		$r.html('<span style="color:red;">Unable to check the automatic code</span>');
 	});
 
 	return false;

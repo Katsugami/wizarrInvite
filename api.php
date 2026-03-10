@@ -558,7 +558,7 @@ $app->get('/plugins/wizarrinvite/test', function ($request, $response, $args) {
 		$result = wizarrinvite_request($baseUrl, $key, 'GET', 'invitations');
 		$GLOBALS['api']['response']['result'] = ((int)$result['http'] === 200) ? 'success' : 'error';
 		$GLOBALS['api']['response']['message'] = ((int)$result['http'] === 200)
-			? 'Connection OK with X-API-Key on /api/invitations'
+			? 'Connection OK'
 			: ($result['http'] ? ('HTTP error ' . $result['http']) : ('Network error: ' . $result['curl_error']));
 		$GLOBALS['api']['response']['data'] = $result;
 	}
