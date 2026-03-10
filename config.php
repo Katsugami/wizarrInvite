@@ -12,8 +12,8 @@ return [
 
 	'WIZARRINVITE-manual-expiration' => '1',
 	'WIZARRINVITE-manual-access-days' => '7',
-	'WIZARRINVITE-manual-server-ids' => '1,2',
-	'WIZARRINVITE-manual-library-ids' => '4,5,7,9,10',
+	'WIZARRINVITE-manual-server-ids' => '',
+	'WIZARRINVITE-manual-library-ids' => '',
 	'WIZARRINVITE-manual-allow-downloads' => false,
 	'WIZARRINVITE-manual-allow-live-tv' => false,
 	'WIZARRINVITE-manual-allow-mobile-uploads' => false,
@@ -28,5 +28,6 @@ return [
 	'WIZARRINVITE-auto-allow-live-tv' => false,
 	'WIZARRINVITE-auto-allow-mobile-uploads' => false
 ];
+
 
 
