@@ -1,7 +1,7 @@
 # wizarrInvite – Organizr Plugin
 
 <p align="center">
-<img src="logo.png" width="140">
+<img src="wizarr.png" width="140">
 </p>
 
 <p align="center">
@@ -114,7 +114,7 @@ config.php
 display-fr.php
 display-en.php
 display-es.php
-logo.png
+wizarr.png
 preview.png
 ```
 
