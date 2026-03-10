@@ -9,7 +9,7 @@ $GLOBALS['plugins']['WizarrInvite'] = [
 	'idPrefix' => 'WIZARRINVITE',
 	'configPrefix' => 'WIZARRINVITE',
 	'version' => '1.0.0',
-	'image' => file_exists(__DIR__ . '/logo.png') ? '/data/plugins/wizarrInvite/logo.png' : '/api/plugins/wizarrInvite/logo.png',
+	'image' => file_exists(__DIR__ . '/wizarr.png') ? '/data/plugins/wizarrInvite/wizarr.png' : '/api/plugins/wizarrInvite/wizarr.png',
 	'settings' => true,
 	'bind' => true,
 	'api' => 'api/v2/plugins/wizarrinvite/settings',
@@ -269,4 +269,5 @@ class WizarrInvite extends Organizr
 			]
 		];
 	}
+
 }
