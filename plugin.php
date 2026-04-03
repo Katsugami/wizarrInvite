@@ -22,13 +22,12 @@ class WizarrInvite extends Organizr
 {
 	public function wizarrInviteGetSettings()
 	{
-		$manualServerIds = $this->config['WIZARRINVITE-manual-server-ids'] ?? '1,2';
-		$manualLibraryIds = $this->config['WIZARRINVITE-manual-library-ids'] ?? '4,5,7,9,10';
+		$manualServerIds  = $this->config['WIZARRINVITE-manual-server-ids']  ?? '';
+		$manualLibraryIds = $this->config['WIZARRINVITE-manual-library-ids'] ?? '';
+		$manualBundleId   = htmlspecialchars($this->config['WIZARRINVITE-manual-bundle-id'] ?? '', ENT_QUOTES, 'UTF-8');
 
-		$autoServerIds = $this->config['WIZARRINVITE-auto-server-ids'] ?? '1,2';
-		$autoLibraryIds = $this->config['WIZARRINVITE-auto-library-ids'] ?? '4,5,7,9,10';
-
-		$minGroup = (string)($this->config['WIZARRINVITE-min-group'] ?? '5');
+		// Compatibilité : lecture du nouvel emplacement, fallback sur l'ancien
+		$minGroup = (string)($this->config['WIZARRINVITE-manual-min-group'] ?? $this->config['WIZARRINVITE-min-group'] ?? '2');
 
 		return [
 			'Wizarr Connection' => [
@@ -59,28 +58,72 @@ class WizarrInvite extends Organizr
 						<button type="button" id="wizarrinvite-test-btn" class="btn btn-primary">Test Wizarr Connection</button>
 						<div id="wizarrinvite-test-result" style="margin-top:10px;"></div>
 					'
+				],
+				[
+					'type' => 'html',
+					'label' => 'Users Check',
+					'html' => '
+						<button type="button" id="wizarrinvite-check-users-btn" class="btn btn-info">Check Users</button>
+						<div id="wizarrinvite-users-result" style="margin-top:10px; font-size:13px; line-height:1.6;"></div>
+					'
 				]
 			],
 
 			'Manual Invitation' => [
+				// ── Ligne 1 gauche : 3 paramètres d'accès groupés ────────────────
 				[
 					'type' => 'html',
-					'label' => 'Wizarr Expiration',
+					'label' => 'Access Settings',
 					'html' => '
-						<select id="WIZARRINVITE-manual-expiration" name="WIZARRINVITE-manual-expiration" class="form-control" data-current="' . htmlspecialchars($this->config['WIZARRINVITE-manual-expiration'] ?? '1', ENT_QUOTES, 'UTF-8') . '">
-							<option value="1">1 day</option>
-							<option value="7">7 days</option>
-							<option value="30">30 days</option>
-							<option value="never">Never</option>
-						</select>
+						<div style="display:flex; flex-direction:column; gap:10px; max-width:280px;">
+							<div>
+								<div style="font-size:12px; font-weight:600; margin-bottom:5px;">Minimum Organizr Group</div>
+								<select id="WIZARRINVITE-manual-min-group" name="WIZARRINVITE-manual-min-group" class="form-control">
+									<option value="1"' . ($minGroup === '1' ? ' selected' : '') . '>1 – Admin</option>
+									<option value="2"' . ($minGroup === '2' ? ' selected' : '') . '>2 – Co-Admin</option>
+									<option value="3"' . ($minGroup === '3' ? ' selected' : '') . '>3 – Super User</option>
+									<option value="4"' . ($minGroup === '4' ? ' selected' : '') . '>4 – Power User</option>
+									<option value="5"' . ($minGroup === '5' ? ' selected' : '') . '>5 – User</option>
+									<option value="6"' . ($minGroup === '6' ? ' selected' : '') . '>6 – Guest</option>
+								</select>
+								<div style="font-size:11px; opacity:.6; margin-top:3px;">Minimum group required to create invitations.</div>
+							</div>
+							<div>
+								<div style="font-size:12px; font-weight:600; margin-bottom:5px;">Wizarr Expiration</div>
+								<select id="WIZARRINVITE-manual-expiration" name="WIZARRINVITE-manual-expiration" class="form-control"
+										data-current="' . htmlspecialchars($this->config['WIZARRINVITE-manual-expiration'] ?? '1', ENT_QUOTES, 'UTF-8') . '">
+									<option value="1">1 day</option>
+									<option value="7">7 days</option>
+									<option value="30">30 days</option>
+									<option value="never">Never</option>
+								</select>
+							</div>
+							<div>
+								<div style="font-size:12px; font-weight:600; margin-bottom:5px;">Access Duration (days)</div>
+								<input type="text" id="WIZARRINVITE-manual-access-days" name="WIZARRINVITE-manual-access-days"
+									   class="form-control"
+									   value="' . htmlspecialchars($this->config['WIZARRINVITE-manual-access-days'] ?? '7', ENT_QUOTES, 'UTF-8') . '">
+							</div>
+						</div>
 					'
 				],
+				// ── Ligne 1 droite : Bundle ───────────────────────────────────────
 				[
-					'type' => 'text',
-					'name' => 'WIZARRINVITE-manual-access-days',
-					'label' => 'Access Duration (days)',
-					'value' => $this->config['WIZARRINVITE-manual-access-days'] ?? '7'
+					'type' => 'html',
+					'label' => 'Bundle',
+					'html' => '
+						<div style="max-width:280px;">
+							<input type="text" id="WIZARRINVITE-manual-bundle-id" name="WIZARRINVITE-manual-bundle-id"
+								   class="form-control" placeholder="Empty = default bundle"
+								   value="' . $manualBundleId . '">
+							<div style="margin-top:6px; font-size:11px; opacity:.6; line-height:1.5;">
+								Leave empty to use the default bundle.<br>
+								<strong>1</strong> = first bundle, <strong>2</strong> = second, etc.
+							</div>
+						</div>
+					'
 				],
+				// ── Ligne 2 : Permissions (toggles natifs, 2 par ligne) ───────────
 				[
 					'type' => 'checkbox',
 					'name' => 'WIZARRINVITE-manual-allow-downloads',
@@ -93,6 +136,7 @@ class WizarrInvite extends Organizr
 					'label' => 'Allow Live TV',
 					'value' => !empty($this->config['WIZARRINVITE-manual-allow-live-tv'])
 				],
+				// ── Ligne 3 : Suite des permissions ──────────────────────────────
 				[
 					'type' => 'checkbox',
 					'name' => 'WIZARRINVITE-manual-allow-mobile-uploads',
@@ -105,6 +149,7 @@ class WizarrInvite extends Organizr
 					'label' => 'Invite to Plex Home',
 					'value' => !empty($this->config['WIZARRINVITE-manual-invite-to-plex-home'])
 				],
+				// ── Ligne 4 gauche : Sélecteur serveurs/bibliothèques ─────────────
 				[
 					'type' => 'html',
 					'label' => 'Servers and Libraries',
@@ -113,12 +158,13 @@ class WizarrInvite extends Organizr
 						<input type="hidden" id="WIZARRINVITE-manual-library-ids" name="WIZARRINVITE-manual-library-ids" value="' . htmlspecialchars($manualLibraryIds, ENT_QUOTES, 'UTF-8') . '">
 						<button type="button" id="wizarrinvite-load-manual-selector-btn" class="btn btn-info">Load Servers and Libraries</button>
 						<div id="wizarrinvite-manual-selector" style="margin-top:12px;"></div>
-						<div style="margin-top:12px;">
-							<div><strong>Selected Servers:</strong> <span id="wizarrinvite-manual-selected-servers">-</span></div>
-							<div><strong>Selected Libraries:</strong> <span id="wizarrinvite-manual-selected-libraries">-</span></div>
+						<div style="margin-top:8px; font-size:12px; opacity:.8;">
+							<strong>Servers:</strong> <span id="wizarrinvite-manual-selected-servers">-</span><br>
+							<strong>Libraries:</strong> <span id="wizarrinvite-manual-selected-libraries">-</span>
 						</div>
 					'
 				],
+				// ── Ligne 4 droite : Action ───────────────────────────────────────
 				[
 					'type' => 'html',
 					'label' => 'Action',
@@ -129,110 +175,50 @@ class WizarrInvite extends Organizr
 				]
 			],
 
-			'Automatic Invitation' => [
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-auto-enabled',
-					'label' => 'Enable Automatic Mode',
-					'value' => !empty($this->config['WIZARRINVITE-auto-enabled'])
-				],
+			'Automatic Slots' => [
 				[
 					'type' => 'html',
-					'label' => 'Wizarr Expiration',
+					'label' => 'Slot Manager',
 					'html' => '
-						<select id="WIZARRINVITE-auto-expiration" name="WIZARRINVITE-auto-expiration" class="form-control" data-current="' . htmlspecialchars($this->config['WIZARRINVITE-auto-expiration'] ?? '1', ENT_QUOTES, 'UTF-8') . '">
-							<option value="1">1 day</option>
-							<option value="7">7 days</option>
-							<option value="30">30 days</option>
-							<option value="never">Never</option>
-						</select>
-					'
-				],
-				[
-					'type' => 'text',
-					'name' => 'WIZARRINVITE-auto-access-days',
-					'label' => 'Access Duration (days)',
-					'value' => $this->config['WIZARRINVITE-auto-access-days'] ?? '7'
-				],
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-auto-allow-downloads',
-					'label' => 'Allow Downloads',
-					'value' => !empty($this->config['WIZARRINVITE-auto-allow-downloads'])
-				],
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-auto-allow-live-tv',
-					'label' => 'Allow Live TV',
-					'value' => !empty($this->config['WIZARRINVITE-auto-allow-live-tv'])
-				],
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-auto-allow-mobile-uploads',
-					'label' => 'Allow Mobile Uploads',
-					'value' => !empty($this->config['WIZARRINVITE-auto-allow-mobile-uploads'])
-				],
-				[
-					'type' => 'html',
-					'label' => 'Servers and Libraries',
-					'html' => '
-						<input type="hidden" id="WIZARRINVITE-auto-server-ids" name="WIZARRINVITE-auto-server-ids" value="' . htmlspecialchars($autoServerIds, ENT_QUOTES, 'UTF-8') . '">
-						<input type="hidden" id="WIZARRINVITE-auto-library-ids" name="WIZARRINVITE-auto-library-ids" value="' . htmlspecialchars($autoLibraryIds, ENT_QUOTES, 'UTF-8') . '">
-						<button type="button" id="wizarrinvite-load-auto-selector-btn" class="btn btn-info">Load Servers and Libraries</button>
-						<div id="wizarrinvite-auto-selector" style="margin-top:12px;"></div>
-						<div style="margin-top:12px;">
-							<div><strong>Selected Servers:</strong> <span id="wizarrinvite-auto-selected-servers">-</span></div>
-							<div><strong>Selected Libraries:</strong> <span id="wizarrinvite-auto-selected-libraries">-</span></div>
+						<input type="hidden"
+							id="WIZARRINVITE-slots-config"
+							name="WIZARRINVITE-slots-config"
+							value="' . htmlspecialchars($this->config['WIZARRINVITE-slots-config'] ?? '[]', ENT_QUOTES, 'UTF-8') . '">
+
+						<div id="wizarrinvite-slots-container" style="margin-bottom:12px;"></div>
+
+						<button type="button" id="wizarrinvite-add-slot-btn" class="btn btn-success">+ Add Slot</button>
+
+						<div style="margin-top:10px; opacity:.8; font-size:13px; line-height:1.6;">
+							Each slot has its own permanent invitation code.<br>
+							Display URL pattern: <code>/api/v2/plugins/wizarrinvite/display/{id}</code>
 						</div>
-					'
-				],
-				[
-					'type' => 'html',
-					'label' => 'Action',
-					'html' => '
-						<button type="button" id="wizarrinvite-check-auto-btn" class="btn btn-success">Check / Recreate Automatic Code</button>
-						<div id="wizarrinvite-auto-result" style="margin-top:10px;"></div>
 					'
 				]
 			],
 
-			'Organizr' => [
-				[
-					'type' => 'html',
-					'label' => 'Minimum Organizr Group',
-					'html' => '
-						<select id="WIZARRINVITE-min-group" name="WIZARRINVITE-min-group" class="form-control" data-current="' . htmlspecialchars($minGroup, ENT_QUOTES, 'UTF-8') . '">
-							<option value="1"' . ($minGroup === '1' ? ' selected' : '') . '>1 - Admin</option>
-							<option value="2"' . ($minGroup === '2' ? ' selected' : '') . '>2 - Co-Admin</option>
-							<option value="3"' . ($minGroup === '3' ? ' selected' : '') . '>3 - Super User</option>
-							<option value="4"' . ($minGroup === '4' ? ' selected' : '') . '>4 - Power User</option>
-							<option value="5"' . ($minGroup === '5' ? ' selected' : '') . '>5 - User</option>
-							<option value="6"' . ($minGroup === '6' ? ' selected' : '') . '>6 - Guest</option>
-						</select>
-						<div style="margin-top:8px; opacity:.9; line-height:1.6;">
-							Choose here the minimum authorized level required to display the plugin page.
-						</div>
-					'
-				]
-			],
 
 			'Display Language' => [
 				[
 					'type' => 'text',
 					'name' => 'WIZARRINVITE-display-custom-file',
 					'label' => 'Display Used',
-					'value' => $this->config['WIZARRINVITE-display-custom-file'] ?? 'display-fr',
-					'placeholder' => 'display-fr'
+					'value' => $this->config['WIZARRINVITE-display-custom-file'] ?? 'display/default/display-en',
+					'placeholder' => 'display/default/display-en'
 				],
 				[
 					'type' => 'html',
 					'label' => 'Information',
 					'html' => '
 						<div style="line-height:1.6; opacity:.95;">
-							<p>Enter only the name of the display file to load.</p>
-							<p>Examples: <code>display-fr</code>, <code>display-en</code>, <code>display-es</code>.</p>
-							<p>The plugin will automatically add <code>.php</code> if needed.</p>
-							<p>This field is only used to choose which display file will be loaded by the plugin\'s single URL.</p>
+							<p>Enter the relative path (without <code>.php</code>) of the display file to load.</p>
+							<p>📁 Built-in displays (in <code>display/default/</code>):</p>
+							<ul style="margin:4px 0 8px 16px;">
+								<li>🇫🇷 <code>display/default/display-fr</code> — French</li>
+								<li>🇬🇧 <code>display/default/display-en</code> — English</li>
+								<li>🇪🇸 <code>display/default/display-es</code> — Spanish</li>
+							</ul>
+							<p>🛠️ To use a custom display, place your file anywhere inside the plugin folder and enter its relative path here.</p>
 						</div>
 					'
 				]
@@ -241,30 +227,132 @@ class WizarrInvite extends Organizr
 			'Info' => [
 				[
 					'type' => 'html',
-					'label' => 'Usage',
+					'label' => 'How to use slots',
 					'html' => '
-						<div style="line-height:1.7;">
-							<p><strong>Important:</strong> the homepage URL must always be exactly:</p>
-							<p><code>https://yourdomain.com/api/v2/plugins/wizarrinvite/display</code></p>
+						<div style="line-height:1.8; font-size:13px;">
+							<p>Each <strong>Automatic Slot</strong> has a unique ID (1, 2, 3…).<br>
+							Each slot gets its own invitation page URL using this pattern:</p>
 
-							<p>You must <strong>not</strong> use:</p>
-							<p><code>https://yourdomain.com/api/v2/plugins/wizarrinvite/display-fr</code></p>
-							<p><code>https://yourdomain.com/api/v2/plugins/wizarrinvite/display-en</code></p>
-							<p><code>https://yourdomain.com/api/v2/plugins/wizarrinvite/display-es</code></p>
+							<p style="font-size:14px; font-weight:600; background:rgba(255,255,255,.06); border-radius:6px; padding:8px 12px; margin:8px 0;">
+								https://yourdomain.com/api/v2/plugins/wizarrinvite/display/<strong style="color:#a78bfa;">[ID]</strong>
+							</p>
 
-							<p>The displayed file is <strong>not</strong> selected in the URL.</p>
-							<p>The displayed file is selected only in the <strong>Display Used</strong> field.</p>
+							<p>Replace <strong style="color:#a78bfa;">[ID]</strong> with the number shown on the slot card:</p>
+							<ul style="margin:4px 0 8px 20px;">
+								<li>Slot #1 &nbsp;→&nbsp; <code>/api/v2/plugins/wizarrinvite/display/1</code></li>
+								<li>Slot #2 &nbsp;→&nbsp; <code>/api/v2/plugins/wizarrinvite/display/2</code></li>
+								<li>Slot #3 &nbsp;→&nbsp; <code>/api/v2/plugins/wizarrinvite/display/3</code></li>
+							</ul>
 
-							<p>Examples in <strong>Display Used</strong>:</p>
-							<p><code>display-fr</code> loads <code>display-fr.php</code></p>
-							<p><code>display-en</code> loads <code>display-en.php</code></p>
-							<p><code>display-es</code> loads <code>display-es.php</code></p>
+							<p style="opacity:.7; font-size:12px;">
+								💡 This is the URL you put in Organizr as the homepage for that slot.<br>
+								Each slot has a separate user limit, servers, and libraries.
+							</p>
+						</div>
+					'
+				],
+				[
+					'type' => 'html',
+					'label' => 'Display language',
+					'html' => '
+						<div style="line-height:1.8; font-size:13px;">
+							<p>The page shown to users is controlled by <strong>Display Language → Display Used</strong>.<br>
+							This setting applies to <em>all</em> slots at once.</p>
 
-							<p>You therefore need to:</p>
-							<p>1. set the file name in <strong>Display Used</strong></p>
-							<p>2. then use only the single URL <code>/api/v2/plugins/wizarrinvite/display</code></p>
+							<p>Included languages:</p>
+							<ul style="margin:4px 0 8px 20px;">
+								<li><code>display/default/display-fr</code> — French 🇫🇷</li>
+								<li><code>display/default/display-en</code> — English 🇬🇧</li>
+								<li><code>display/default/display-es</code> — Spanish 🇪🇸</li>
+							</ul>
 
-							<p>The automatic code is stored in <code>/config/www/organizr/data/cache/wizarrinvite_current.json</code>.</p>
+							<p style="opacity:.7; font-size:12px;">
+								You can create your own display file and put its relative path here.<br>
+								The <code>.php</code> extension is added automatically.
+							</p>
+						</div>
+					'
+				],
+				[
+					'type' => 'html',
+					'label' => 'Cache & logs',
+					'html' => '
+						<div style="line-height:1.8; font-size:13px;">
+							<p>All files are saved in:</p>
+							<p style="font-family:monospace; font-size:12px; background:rgba(255,255,255,.06); border-radius:6px; padding:6px 10px;">
+								/config/www/organizr/data/cache/
+							</p>
+							<ul style="margin:4px 0 8px 20px; font-family:monospace; font-size:12px;">
+								<li>wizarrinvite_slot_1.json &nbsp;— slot #1 invite code cache</li>
+								<li>wizarrinvite_slot_2.json &nbsp;— slot #2 invite code cache</li>
+								<li>wizarrinvite_debug.log &nbsp;&nbsp;— plugin activity log</li>
+							</ul>
+							<p style="opacity:.7; font-size:12px;">
+								To force a new invite code for a slot, delete its <code>.json</code> cache file<br>
+								or click <strong>Check / Recreate</strong> on the slot card.
+							</p>
+						</div>
+					'
+				]
+			],
+
+			'Debug' => [
+				[
+					'type' => 'html',
+					'label' => 'Plugin Logs',
+					'html' => '
+						<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
+							<button type="button" id="wizarrinvite-debug-refresh-btn" class="btn btn-info btn-sm">Refresh</button>
+							<button type="button" id="wizarrinvite-debug-clear-btn" class="btn btn-danger btn-sm">Clear Logs</button>
+							<span id="wizarrinvite-debug-status" style="font-size:12px; opacity:.7;"></span>
+						</div>
+						<div id="wizarrinvite-debug-log" style="
+							font-family:monospace; font-size:11px; line-height:1.6;
+							background:rgba(0,0,0,.4); border-radius:6px; padding:10px;
+							height:280px; overflow-y:auto; white-space:pre-wrap; color:#e2e8f0;
+							text-align:left; display:block;">📋 Click Refresh to load logs.</div>
+					'
+				]
+			],
+
+			'API Tester' => [
+				[
+					'type' => 'html',
+					'label' => 'Wizarr API Docs',
+					'html' => '
+						<div style="line-height:1.8; font-size:13px;">
+							<p>Wizarr includes an interactive API documentation page (Swagger / OpenAPI).<br>
+							Use it to browse all available endpoints and send test requests directly.</p>
+
+							<div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+								<div>
+									<div style="font-size:12px; font-weight:600; margin-bottom:5px;">Internal access (LAN)</div>
+									<a href="' . rtrim($this->config['WIZARRINVITE-url'] ?? '', '/') . '/api/docs/"
+									   target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+										Open Wizarr API Docs (internal)
+									</a>
+									<div style="margin-top:4px; font-family:monospace; font-size:11px; opacity:.6;">
+										' . rtrim($this->config['WIZARRINVITE-url'] ?? '', '/') . '/api/docs/
+									</div>
+								</div>
+								' . (!empty($this->config['WIZARRINVITE-public-url']) ? '
+								<div>
+									<div style="font-size:12px; font-weight:600; margin-bottom:5px;">External access (domain)</div>
+									<a href="' . rtrim($this->config['WIZARRINVITE-public-url'], '/') . '/api/docs/"
+									   target="_blank" rel="noopener noreferrer" class="btn btn-info btn-sm">
+										Open Wizarr API Docs (external)
+									</a>
+									<div style="margin-top:4px; font-family:monospace; font-size:11px; opacity:.6;">
+										' . rtrim($this->config['WIZARRINVITE-public-url'], '/') . '/api/docs/
+									</div>
+								</div>
+								' : '') . '
+							</div>
+
+							<p style="opacity:.7; font-size:12px; margin-top:12px;">
+								The API key configured above is required to authenticate on that page.<br>
+								All Wizarr endpoints (users, invitations, bundles, servers…) are documented there.
+							</p>
 						</div>
 					'
 				]
