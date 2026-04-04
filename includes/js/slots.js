@@ -15,9 +15,12 @@ function wizarrinviteGetSlotsConfig() {
 
 /**
  * Sérialise les slots dans le champ caché pour qu'Organizr les sauvegarde.
+ * Le .trigger('change') déclenche l'événement natif qu'Organizr écoute
+ * pour afficher le bouton Save — sans ça, les clics Add/Remove passaient
+ * inaperçus car .val() ne génère pas d'événement change automatiquement.
  */
 function wizarrinviteSaveSlotsConfig(slots) {
-	$('#WIZARRINVITE-slots-config').val(JSON.stringify(slots));
+	$('#WIZARRINVITE-slots-config').val(JSON.stringify(slots)).trigger('change');
 }
 
 /**
