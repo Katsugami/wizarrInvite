@@ -273,7 +273,7 @@ Each slot has the same permission fields as the manual invitation, plus:
 
 Katsugami
 
-AI development assistance: Claude (Anthropic)
+AI development assistance: ChatGPT (v1.0) — Claude by Anthropic (v2.0)
 
 The project structure, integration, testing, and assembly were performed by Katsugami.
 
