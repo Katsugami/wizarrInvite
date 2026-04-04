@@ -262,8 +262,10 @@ Each slot has the same permission fields as the manual invitation, plus:
 
 ## Compatibility
 
-- Organizr v2
-- Wizarr v4+ (REST API with `/api/` prefix)
+| Software | Tested version |
+|----------|----------------|
+| Organizr | 2.1.4010 |
+| Wizarr | v2026.4.0 |
 
 ---
 
