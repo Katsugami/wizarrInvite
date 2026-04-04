@@ -31,12 +31,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Extrait une clé d'identification pour un utilisateur Plex.
- * Essaie plusieurs noms de champs selon les versions de Wizarr.
- * Utilisée pour la déduplication intra-serveur.
+ * Extrait une clé d'identification stable pour un utilisateur Plex.
+ *
+ * L'ordre des champs suit une priorité décroissante de fiabilité :
+ *  1. email / plex_email       → identifiant Plex le plus stable
+ *  2. username / plex_username → stable mais peut changer
+ *  3. plex_id                  → ID numérique Plex (pas toujours exposé)
+ *  4. token                    → présent dans certaines versions de Wizarr
+ *  5. wid_{id}                 → dernier recours : ID interne Wizarr (unique par serveur,
+ *                                 mais pas cross-serveur → déduplication imparfaite)
+ *
+ * Cet ordre est important car l'API Wizarr n'expose pas toujours les mêmes champs
+ * selon la version installée.
  *
  * @param  array $user
- * @return string
+ * @return string  Clé normalisée en minuscules
  */
 function wizarrinvite_user_key($user)
 {

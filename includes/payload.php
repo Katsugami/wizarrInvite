@@ -36,11 +36,20 @@ function wizarrinvite_mode_cfg($cfg, $mode)
 
 /**
  * Normalise un payload avant envoi à l'API ou calcul de signature.
- * - Trie et caste les ids en entiers
- * - Caste expires_in_days en int (ou null)
- * - Caste duration en string
- * - Caste les booléens
- * - Trie les clés alphabétiquement (cohérence de signature)
+ *
+ * Cette normalisation sert deux objectifs :
+ *  1. Cohérence des types envoyés à l'API Wizarr (évite les rejets 422)
+ *  2. Signatures stables : deux payloads identiques mais construits dans des
+ *     ordres différents doivent produire le même SHA-1. Le tri alphabétique
+ *     des clés (ksort) et le tri des tableaux d'IDs garantissent cette stabilité.
+ *
+ * Transformations appliquées :
+ *  - server_ids / library_ids → tableau d'entiers triés
+ *  - expires_in_days          → entier ou null
+ *  - duration                 → string (Wizarr attend "7", pas 7)
+ *  - booléens                 → bool strict
+ *  - wizard_bundle_id null    → champ supprimé (ne pas envoyer null à l'API)
+ *  - clés                     → triées alphabétiquement
  *
  * @param  array $payload
  * @return array

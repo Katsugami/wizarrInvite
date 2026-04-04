@@ -8,7 +8,7 @@ $GLOBALS['plugins']['WizarrInvite'] = [
 	'license' => 'personal',
 	'idPrefix' => 'WIZARRINVITE',
 	'configPrefix' => 'WIZARRINVITE',
-	'version' => '1.0.0',
+	'version' => '2.0.0',
 	'image' => file_exists(dirname(__DIR__, 3) . '/data/plugins/' . basename(__DIR__) . '/wizarr.png')
 		? '/data/plugins/' . basename(__DIR__) . '/wizarr.png'
 		: '/api/plugins/' . basename(__DIR__) . '/wizarr.png',
@@ -123,33 +123,8 @@ class WizarrInvite extends Organizr
 						</div>
 					'
 				],
-				// ── Ligne 2 : Permissions (toggles natifs, 2 par ligne) ───────────
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-manual-allow-downloads',
-					'label' => 'Allow Downloads',
-					'value' => !empty($this->config['WIZARRINVITE-manual-allow-downloads'])
-				],
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-manual-allow-live-tv',
-					'label' => 'Allow Live TV',
-					'value' => !empty($this->config['WIZARRINVITE-manual-allow-live-tv'])
-				],
-				// ── Ligne 3 : Suite des permissions ──────────────────────────────
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-manual-allow-mobile-uploads',
-					'label' => 'Allow Mobile Uploads',
-					'value' => !empty($this->config['WIZARRINVITE-manual-allow-mobile-uploads'])
-				],
-				[
-					'type' => 'checkbox',
-					'name' => 'WIZARRINVITE-manual-invite-to-plex-home',
-					'label' => 'Invite to Plex Home',
-					'value' => !empty($this->config['WIZARRINVITE-manual-invite-to-plex-home'])
-				],
-				// ── Ligne 4 gauche : Sélecteur serveurs/bibliothèques ─────────────
+				// ── Ligne 2 gauche : Sélecteur serveurs/bibliothèques ────────────
+				// Placé avant les Permissions pour apparaître dans la colonne gauche.
 				[
 					'type' => 'html',
 					'label' => 'Servers and Libraries',
@@ -164,13 +139,49 @@ class WizarrInvite extends Organizr
 						</div>
 					'
 				],
-				// ── Ligne 4 droite : Action ───────────────────────────────────────
+				// ── Ligne 2 droite : Permissions + Action ────────────────────────
+				// Pattern hidden+checkbox : le champ caché garantit une valeur vide
+				// lorsque la case est décochée (un checkbox non coché n'est pas envoyé).
 				[
 					'type' => 'html',
-					'label' => 'Action',
+					'label' => 'Permissions',
 					'html' => '
-						<button type="button" id="wizarrinvite-create-manual-btn" class="btn btn-success">Create Manual Invitation</button>
-						<div id="wizarrinvite-manual-result" style="margin-top:10px;"></div>
+						<div style="display:flex; flex-direction:column; gap:14px;">
+							<div style="display:flex; flex-wrap:wrap; gap:18px;">
+								<label class="wz-toggle">
+									<input type="hidden"   name="WIZARRINVITE-manual-allow-downloads" value="">
+									<input type="checkbox" name="WIZARRINVITE-manual-allow-downloads" value="1"'
+										. (!empty($this->config['WIZARRINVITE-manual-allow-downloads']) ? ' checked' : '') . '>
+									<span class="wz-toggle-track"></span>
+									<span>Allow Downloads</span>
+								</label>
+								<label class="wz-toggle">
+									<input type="hidden"   name="WIZARRINVITE-manual-allow-live-tv" value="">
+									<input type="checkbox" name="WIZARRINVITE-manual-allow-live-tv" value="1"'
+										. (!empty($this->config['WIZARRINVITE-manual-allow-live-tv']) ? ' checked' : '') . '>
+									<span class="wz-toggle-track"></span>
+									<span>Allow Live TV</span>
+								</label>
+								<label class="wz-toggle">
+									<input type="hidden"   name="WIZARRINVITE-manual-allow-mobile-uploads" value="">
+									<input type="checkbox" name="WIZARRINVITE-manual-allow-mobile-uploads" value="1"'
+										. (!empty($this->config['WIZARRINVITE-manual-allow-mobile-uploads']) ? ' checked' : '') . '>
+									<span class="wz-toggle-track"></span>
+									<span>Allow Mobile Uploads</span>
+								</label>
+								<label class="wz-toggle">
+									<input type="hidden"   name="WIZARRINVITE-manual-invite-to-plex-home" value="">
+									<input type="checkbox" name="WIZARRINVITE-manual-invite-to-plex-home" value="1"'
+										. (!empty($this->config['WIZARRINVITE-manual-invite-to-plex-home']) ? ' checked' : '') . '>
+									<span class="wz-toggle-track"></span>
+									<span>Invite to Plex Home</span>
+								</label>
+							</div>
+							<div>
+								<button type="button" id="wizarrinvite-create-manual-btn" class="btn btn-success">Create Manual Invitation</button>
+								<div id="wizarrinvite-manual-result" style="margin-top:10px;"></div>
+							</div>
+						</div>
 					'
 				]
 			],
@@ -180,6 +191,7 @@ class WizarrInvite extends Organizr
 					'type' => 'html',
 					'label' => 'Slot Manager',
 					'html' => '
+						<div id="wizarrinvite-slots-fullwidth">
 						<input type="hidden"
 							id="WIZARRINVITE-slots-config"
 							name="WIZARRINVITE-slots-config"
@@ -192,6 +204,7 @@ class WizarrInvite extends Organizr
 						<div style="margin-top:10px; opacity:.8; font-size:13px; line-height:1.6;">
 							Each slot has its own permanent invitation code.<br>
 							Display URL pattern: <code>/api/v2/plugins/wizarrinvite/display/{id}</code>
+						</div>
 						</div>
 					'
 				]
@@ -324,28 +337,18 @@ class WizarrInvite extends Organizr
 							<p>Wizarr includes an interactive API documentation page (Swagger / OpenAPI).<br>
 							Use it to browse all available endpoints and send test requests directly.</p>
 
-							<div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
-								<div>
-									<div style="font-size:12px; font-weight:600; margin-bottom:5px;">Internal access (LAN)</div>
-									<a href="' . rtrim($this->config['WIZARRINVITE-url'] ?? '', '/') . '/api/docs/"
-									   target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
-										Open Wizarr API Docs (internal)
-									</a>
-									<div style="margin-top:4px; font-family:monospace; font-size:11px; opacity:.6;">
-										' . rtrim($this->config['WIZARRINVITE-url'] ?? '', '/') . '/api/docs/
-									</div>
-								</div>
+							<div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+								' . (($this->config['WIZARRINVITE-url'] ?? '') !== '' ? '
+								<a href="' . rtrim($this->config['WIZARRINVITE-url'], '/') . '/api/docs/"
+								   target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+									Internal (LAN)
+								</a>
+								' : '') . '
 								' . (!empty($this->config['WIZARRINVITE-public-url']) ? '
-								<div>
-									<div style="font-size:12px; font-weight:600; margin-bottom:5px;">External access (domain)</div>
-									<a href="' . rtrim($this->config['WIZARRINVITE-public-url'], '/') . '/api/docs/"
-									   target="_blank" rel="noopener noreferrer" class="btn btn-info btn-sm">
-										Open Wizarr API Docs (external)
-									</a>
-									<div style="margin-top:4px; font-family:monospace; font-size:11px; opacity:.6;">
-										' . rtrim($this->config['WIZARRINVITE-public-url'], '/') . '/api/docs/
-									</div>
-								</div>
+								<a href="' . rtrim($this->config['WIZARRINVITE-public-url'], '/') . '/api/docs/"
+								   target="_blank" rel="noopener noreferrer" class="btn btn-info btn-sm">
+									External (WAN)
+								</a>
 								' : '') . '
 							</div>
 

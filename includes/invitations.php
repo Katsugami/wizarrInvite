@@ -155,7 +155,14 @@ function wizarrinvite_create_invite($cfg, $mode)
 
 /**
  * Cherche dans Wizarr l'invitation correspondant aux données du cache local.
- * La correspondance se fait d'abord par ID, puis par code si l'ID est absent.
+ *
+ * Stratégie de correspondance (par ordre de priorité) :
+ *  1. Par ID numérique Wizarr → correspondance exacte et rapide
+ *  2. Par code alphanumérique → fallback si l'ID a changé entre deux versions
+ *
+ * Cette fonction est appelée lors de la vérification périodique (toutes les 5 min)
+ * pour s'assurer que l'invitation en cache existe toujours côté Wizarr et n'a pas
+ * été supprimée manuellement depuis l'interface Wizarr.
  *
  * @param  array $cfg    Configuration du plugin
  * @param  array $cache  Données du cache local (doit contenir 'id' et/ou 'code')

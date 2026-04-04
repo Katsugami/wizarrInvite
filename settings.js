@@ -1,3 +1,79 @@
+// Drapeau actif pendant le rendu du sélecteur serveurs/bibliothèques.
+// Permet à l'override de wizarrinviteSyncSelection (slots.js) de savoir
+// que l'appel provient d'un rendu initial (Load Servers) et non d'un vrai
+// changement utilisateur — évite de déclencher le bouton Save inutilement.
+var _wizarrinviteRenderingSelector = false;
+
+// ── Styles CSS des toggles (injectés une seule fois au chargement) ────────────
+// Partagés entre les slots (slots.js), le sélecteur serveurs/bibliothèques et
+// les cases à cocher de l'onglet Manual Invitation. Le sélecteur adjacent
+// input:checked + .wz-toggle-track permet un état visuel en CSS pur.
+(function () {
+	if (document.getElementById('wizarrinvite-toggle-styles')) return;
+	var s = document.createElement('style');
+	s.id  = 'wizarrinvite-toggle-styles';
+	s.textContent = [
+		'.wz-toggle{display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;user-select:none;}',
+		'.wz-toggle input[type="checkbox"]{position:absolute;opacity:0;width:0;height:0;}',
+		'.wz-toggle-track{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;',
+		'  background:rgba(255,255,255,.18);border-radius:24px;transition:background .25s;}',
+		'.wz-toggle-track::after{content:"";position:absolute;width:18px;height:18px;top:3px;left:3px;',
+		'  background:#fff;border-radius:50%;transition:transform .25s;box-shadow:0 1px 3px rgba(0,0,0,.3);}',
+		'.wz-toggle input:checked + .wz-toggle-track{background:#7c3aed;}',
+		'.wz-toggle input:checked + .wz-toggle-track::after{transform:translateX(20px);}',
+	].join('');
+	document.head.appendChild(s);
+}());
+
+/**
+ * Fait occuper la largeur totale de la grille Organizr à la cellule qui
+ * contient l'élément donné.
+ *
+ * Organizr affiche les items de configuration par paires (2 colonnes). Chaque
+ * cellule de grille a donc exactement un frère. Cette fonction remonte le DOM
+ * jusqu'à trouver cet ancêtre "cellule", puis :
+ *   — applique grid-column:1/-1 et flex:0 0 100% pour forcer la pleine largeur
+ *   — masque le frère uniquement s'il est vide (placeholder sans contenu visible)
+ *
+ * @param {string} elId  ID de l'élément marqueur contenu dans la cellule cible
+ */
+function wizarrinviteExpandFullWidth(elId) {
+	var $marker = $('#' + elId);
+	if (!$marker.length) return;
+
+	var $node = $marker;
+	for (var depth = 0; depth < 12; depth++) {
+		var $parent = $node.parent();
+		if (!$parent.length || $parent.is('body,html')) break;
+
+		// La cellule de grille Organizr a exactement 1 frère (l'autre moitié de la paire)
+		if ($node.siblings().length === 1) {
+			// Pleine largeur : CSS grid + Bootstrap flex
+			$node.css({
+				'grid-column': '1 / -1',
+				'flex':        '0 0 100%',
+				'max-width':   'none',
+				'width':       '100%'
+			});
+			// Corriger les classes Bootstrap si présentes (col-*-6 → col-*-12)
+			var cls = ($node.attr('class') || '').replace(/col-(\w+)-6/g, 'col-$1-12');
+			if (cls) $node.attr('class', cls);
+
+			// Masquer le frère seulement s'il est vide (placeholder Organizr sans contenu)
+			var $sib = $node.siblings();
+			if ($sib.text().trim() === '' && !$sib.find('input,select,button,textarea').length) {
+				$sib.hide();
+			}
+			return;
+		}
+		$node = $parent;
+	}
+}
+
+/**
+ * Convertit une chaîne CSV (ex : "1,2,3") en tableau d'entiers valides.
+ * Les valeurs non-numériques sont ignorées.
+ */
 function wizarrinviteParseCsvInts(raw) {
 	return String(raw || '')
 		.split(',')
@@ -5,7 +81,19 @@ function wizarrinviteParseCsvInts(raw) {
 		.filter(v => !isNaN(v));
 }
 
+/**
+ * Déduplique la liste des bibliothèques retournées par l'API Wizarr.
+ *
+ * Wizarr peut retourner la même bibliothèque deux fois :
+ *  - une fois associée à un vrai serveur (server_id valide, server_name connu)
+ *  - une fois associée à "Unknown" (server_id = null)
+ *
+ * On collecte d'abord les external_id des bibliothèques "connues", puis on
+ * filtre les doublons "Unknown" qui ont un jumeau valide.
+ * Les bibliothèques "Unknown" sans jumeau sont conservées (seule occurrence).
+ */
 function wizarrinviteCleanLibraries(libraries) {
+	// Ensemble des external_id déjà présents dans des bibliothèques "connues"
 	const knownExternalIds = new Set();
 
 	libraries.forEach(function (lib) {
@@ -14,6 +102,7 @@ function wizarrinviteCleanLibraries(libraries) {
 		}
 	});
 
+	// Supprime les entrées "Unknown" dont le external_id existe déjà côté connu
 	return libraries.filter(function (lib) {
 		if (!lib) return false;
 		const isUnknown = (lib.server_id === null || lib.server_name === 'Unknown');
@@ -22,6 +111,11 @@ function wizarrinviteCleanLibraries(libraries) {
 	});
 }
 
+/**
+ * Génère et injecte le sélecteur de serveurs et bibliothèques pour un préfixe donné.
+ * Le préfixe correspond à un mode : 'manual', 'auto', ou 'slot-{id}'.
+ * Les sélections actuelles (champs cachés) sont pré-cochées dans le rendu.
+ */
 function wizarrinviteRenderSelector(prefix, servers, libraries) {
 	const serverField = $('#WIZARRINVITE-' + prefix + '-server-ids');
 	const libraryField = $('#WIZARRINVITE-' + prefix + '-library-ids');
@@ -53,8 +147,9 @@ function wizarrinviteRenderSelector(prefix, servers, libraries) {
 		html += '<div style="border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:16px;">';
 		html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">';
 		html += '<div><div style="font-size:20px; font-weight:700;">' + (server.name || ('Server ' + sid)) + ' <span style="opacity:.5; font-size:14px; font-weight:400;">(ID = ' + sid + ')</span></div><div style="opacity:.8;">' + (server.server_type || '') + '</div></div>';
-		html += '<label style="display:flex; align-items:center; gap:8px; margin:0;">';
+		html += '<label class="wz-toggle">';
 		html += '<input class="wizarrinvite-server-checkbox" data-prefix="' + prefix + '" type="checkbox" value="' + sid + '" data-server-name="' + (server.name || ('Server ' + sid)) + '" ' + checkedServer + '>';
+		html += '<span class="wz-toggle-track"></span>';
 		html += '<span>Use this server</span></label></div>';
 
 		if (!libs.length) {
@@ -63,8 +158,9 @@ function wizarrinviteRenderSelector(prefix, servers, libraries) {
 			html += '<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:8px;">';
 			libs.forEach(function (lib) {
 				const checkedLib = selectedLibraryIds.indexOf(parseInt(lib.id, 10)) !== -1 ? 'checked' : '';
-				html += '<label style="display:flex; align-items:center; gap:8px; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; margin:0;">';
+				html += '<label class="wz-toggle" style="border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px;">';
 				html += '<input class="wizarrinvite-library-checkbox" data-prefix="' + prefix + '" type="checkbox" data-server-id="' + sid + '" data-library-name="' + lib.name + '" value="' + lib.id + '" ' + checkedLib + '>';
+				html += '<span class="wz-toggle-track"></span>';
 				html += '<span>' + lib.name + '</span></label>';
 			});
 			html += '</div>';
@@ -75,7 +171,11 @@ function wizarrinviteRenderSelector(prefix, servers, libraries) {
 
 	html += '</div>';
 	$('#wizarrinvite-' + prefix + '-selector').html(html);
+	// Appel de sync sous flag : mise à jour de l'affichage des sélections uniquement,
+	// sans déclencher le bouton Save (aucune modification réelle de la config).
+	_wizarrinviteRenderingSelector = true;
 	wizarrinviteSyncSelection(prefix);
+	_wizarrinviteRenderingSelector = false;
 }
 
 function wizarrinviteSyncSelection(prefix) {
@@ -198,18 +298,20 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-check-users-btn', function (
 			perServerKeys.forEach(function (serverName) {
 				var count = perServer[serverName];
 				var users = usersByServer[serverName] || [];
+				// ID unique pour la liste dépliable, basé sur le nom du serveur
 				var uid   = 'wizarrinvite-srv-' + serverName.replace(/[^a-z0-9]/gi, '_');
 
 				html += '<div style="background:rgba(255,255,255,.04); border-radius:8px; padding:8px 12px;">';
 
-				// En-tête du serveur — cliquable pour déplier la liste
-				html += '<div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="var l=document.getElementById(\'' + uid + '\');l.style.display=l.style.display===\'none\'?\'block\':\'none\'">';
+				// En-tête cliquable — data-target remplace l'inline onclick
+				html += '<div class="wizarrinvite-srv-toggle" data-target="' + uid + '" ' +
+					'style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">';
 				html += '<span style="font-weight:600;">🖥️ ' + serverName + '</span>';
 				html += '<span style="font-size:12px; color:#a78bfa; font-weight:700;">' + count + ' user' + (count > 1 ? 's' : '') + ' ▾</span>';
 				html += '</div>';
 
 				// Liste des utilisateurs (masquée par défaut)
-				html += '<div id="' + uid + '" style="display:none; margin-top:8px; display:none;">';
+				html += '<div id="' + uid + '" style="display:none; margin-top:8px;">';
 				if (users.length > 0) {
 					html += '<div style="display:flex; flex-direction:column; gap:3px;">';
 					users.forEach(function (u) {
@@ -438,6 +540,12 @@ function wizarrinviteInitState() {
 			$('#wizarrinvite-slots-container').data('slots-initialized', true);
 		}
 	}
+
+	// Expansion pleine largeur du gestionnaire de slots (cellule droite vide masquée)
+	// Délai minimal pour laisser Organizr finaliser le rendu de la grille de settings.
+	if ($('#wizarrinvite-slots-fullwidth').length) {
+		setTimeout(function () { wizarrinviteExpandFullWidth('wizarrinvite-slots-fullwidth'); }, 50);
+	}
 }
 
 $(document).ready(function () {
@@ -456,6 +564,16 @@ $(document).ajaxComplete(function () {
 		});
 	}
 	wizarrinviteInitState();
+});
+
+// ── Accordéon "par serveur" dans Check Users ─────────────────────────────────
+// Remplace l'ancien inline onclick="..." par un event listener délégué propre.
+// Le div cliquable porte la classe .wizarrinvite-srv-toggle et data-target="{id}".
+$(document).off('click.wizarrinvite', '.wizarrinvite-srv-toggle');
+$(document).on('click.wizarrinvite', '.wizarrinvite-srv-toggle', function () {
+	var targetId = $(this).data('target');
+	var $list    = $('#' + targetId);
+	$list.toggle();
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

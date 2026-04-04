@@ -50,11 +50,19 @@ function wizarrinvite_get_slot_by_id($cfg, $slotId)
 }
 
 /**
- * Calcule la signature de la configuration d'un slot.
+ * Calcule la signature SHA-1 de la configuration d'un slot.
  *
- * Couvre tous les champs du slot config (y compris max_users et server_groups)
- * pour détecter les changements qui nécessitent une recréation de l'invitation.
- * La comparaison se fait sur le config, pas le payload effectif filtré.
+ * Chaque fois que l'admin modifie un paramètre du slot, la signature change.
+ * Lors du chargement de la page /display, elle est comparée à celle stockée
+ * en cache : si elles diffèrent, l'invitation existante est supprimée et
+ * une nouvelle est créée avec les nouveaux paramètres.
+ *
+ * Champs inclus dans la signature (et pourquoi) :
+ *  - expiration, access_days, server_ids, library_ids, permissions, bundle_id
+ *    → paramètres directs de l'invitation Wizarr
+ *  - max_users, server_count → paramètres de limite utilisateur : un changement
+ *    de limite ne modifie pas l'invitation existante mais doit quand même
+ *    invalider le cache pour forcer une réévaluation de la capacité
  *
  * @param  array $slotConfig
  * @return string  SHA-1 hexadécimal
