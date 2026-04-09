@@ -261,93 +261,7 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-test-btn', function (e) {
 	return false;
 });
 
-$(document).off('click.wizarrinvite', '#wizarrinvite-check-users-btn');
-$(document).on('click.wizarrinvite', '#wizarrinvite-check-users-btn', function (e) {
-	e.preventDefault();
-	const $r = $('#wizarrinvite-users-result');
-	$r.html('⏳ Fetching user stats...');
-
-	$.when(
-		$.ajax({ url: 'api/v2/plugins/wizarrinvite/user-stats', method: 'GET', dataType: 'json', cache: false }),
-		$.ajax({ url: 'api/v2/plugins/wizarrinvite/servers',    method: 'GET', dataType: 'json', cache: false })
-	).done(function (statsRes, serversRes) {
-		const statsPayload   = statsRes[0];
-		const serversPayload = serversRes[0];
-
-		if (!statsPayload || !statsPayload.response || statsPayload.response.result !== 'success') {
-			$r.html('<span style="color:red;">❌ ' + ((statsPayload && statsPayload.response && statsPayload.response.message) || 'Error') + '</span>');
-			return;
-		}
-
-		const d = statsPayload.response.data || {};
-
-		let html = '<div style="color:lime; margin-bottom:8px;"><strong>✅ Users loaded successfully</strong></div>';
-		html += '<div style="margin-bottom:8px;"><strong>👥 Total users:</strong> ' + (d.count || 0) + '</div>';
-
-		if (d.next_expiry) {
-			html += '<div style="font-size:12px; margin-bottom:8px; color:#94a3b8;">⏰ Next expiry: <strong style="color:#f8fafc;">' + d.next_expiry + '</strong></div>';
-		}
-
-		// Décompte + liste détaillée par serveur (User.server)
-		const perServer     = d.per_server      || {};
-		const usersByServer = d.users_by_server || {};
-		const perServerKeys = Object.keys(perServer);
-
-		if (perServerKeys.length > 0) {
-			html += '<div style="margin-top:10px; display:flex; flex-direction:column; gap:8px;">';
-			perServerKeys.forEach(function (serverName) {
-				var count = perServer[serverName];
-				var users = usersByServer[serverName] || [];
-				// ID unique pour la liste dépliable, basé sur le nom du serveur
-				var uid   = 'wizarrinvite-srv-' + serverName.replace(/[^a-z0-9]/gi, '_');
-
-				html += '<div style="background:rgba(255,255,255,.04); border-radius:8px; padding:8px 12px;">';
-
-				// En-tête cliquable — data-target remplace l'inline onclick
-				html += '<div class="wizarrinvite-srv-toggle" data-target="' + uid + '" ' +
-					'style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;">';
-				html += '<span style="font-weight:600;">🖥️ ' + serverName + '</span>';
-				html += '<span style="font-size:12px; color:#a78bfa; font-weight:700;">' + count + ' user' + (count > 1 ? 's' : '') + ' ▾</span>';
-				html += '</div>';
-
-				// Liste des utilisateurs (masquée par défaut)
-				html += '<div id="' + uid + '" style="display:none; margin-top:8px;">';
-				if (users.length > 0) {
-					html += '<div style="display:flex; flex-direction:column; gap:3px;">';
-					users.forEach(function (u) {
-						var label   = u.username || u.email || '?';
-						var expires = u.expires ? ' <span style="color:#94a3b8; font-size:10px;">exp: ' + u.expires + '</span>' : '';
-						html += '<div style="font-size:11px; padding:3px 8px; border-radius:4px; background:rgba(255,255,255,.03); display:flex; justify-content:space-between; align-items:center;">';
-						html += '<span>👤 ' + label + '</span>';
-						html += expires;
-						html += '</div>';
-					});
-					html += '</div>';
-				} else {
-					html += '<div style="font-size:11px; opacity:.5;">No user detail available.</div>';
-				}
-				html += '</div>';
-
-				html += '</div>';
-			});
-			html += '</div>';
-		} else {
-			// Fallback : liste des serveurs sans comptage (repli /status utilisé)
-			const srvList = (serversPayload && serversPayload.response && serversPayload.response.data && serversPayload.response.data.servers) || [];
-			if (srvList.length > 0) {
-				html += '<div style="margin-top:8px; font-size:12px; color:#94a3b8;">🖥️ Configured servers: ';
-				html += srvList.map(function(s){ return (s.name || 'Server ' + s.id); }).join(', ');
-				html += '</div>';
-			}
-		}
-
-		$r.html(html);
-	}).fail(function () {
-		$r.html('<span style="color:red;">❌ Unable to fetch user stats</span>');
-	});
-
-	return false;
-});
+// ── User-check handlers are in includes/js/settings-users.js (loaded lazily) ─
 
 $(document).off('click.wizarrinvite', '#wizarrinvite-load-manual-selector-btn');
 $(document).on('click.wizarrinvite', '#wizarrinvite-load-manual-selector-btn', function (e) {
@@ -491,6 +405,28 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-debug-refresh-btn', function
 	return false;
 });
 
+$(document).off('click.wizarrinvite', '#wizarrinvite-clear-count-cache-btn');
+$(document).on('click.wizarrinvite', '#wizarrinvite-clear-count-cache-btn', function (e) {
+	e.preventDefault();
+	var $btn    = $(this);
+	var $result = $('#wizarrinvite-clear-count-cache-result');
+	$btn.prop('disabled', true);
+	$result.text('Clearing...');
+	$.ajax({
+		url:      'api/v2/plugins/wizarrinvite/clear-count-cache',
+		method:   'GET',
+		dataType: 'json',
+		cache:    false
+	}).done(function (data) {
+		$result.text(data && data.response && data.response.message ? data.response.message : 'Cache cleared.');
+	}).fail(function () {
+		$result.text('Error.');
+	}).always(function () {
+		$btn.prop('disabled', false);
+	});
+	return false;
+});
+
 $(document).off('click.wizarrinvite', '#wizarrinvite-debug-clear-btn');
 $(document).on('click.wizarrinvite', '#wizarrinvite-debug-clear-btn', function (e) {
 	e.preventDefault();
@@ -546,15 +482,25 @@ function wizarrinviteInitState() {
 	if ($('#wizarrinvite-slots-fullwidth').length) {
 		setTimeout(function () { wizarrinviteExpandFullWidth('wizarrinvite-slots-fullwidth'); }, 50);
 	}
+
+	// Sync du toggle Smart Check : maintient le champ caché à jour pour la soumission du formulaire
+	var $smartToggle = $('#wizarrinvite-smart-check-toggle');
+	if ($smartToggle.length && !$smartToggle.data('wz-initialized')) {
+		$smartToggle.data('wz-initialized', true);
+		$smartToggle.off('change.wizarrinvite-smart').on('change.wizarrinvite-smart', function () {
+			$('#WIZARRINVITE-smart-check-enabled').val($(this).is(':checked') ? '1' : '0');
+		});
+	}
 }
 
-$(document).ready(function () {
-	wizarrinviteInitState();
-});
+// ── Lazy loading of sub-modules ──────────────────────────────────────────────
+var _wizarrinviteSlotsLoading    = false;
+var _wizarrinviteUsersLoading    = false;
+var _wizarrinviteCacheLoading    = false;
+var _wizarrinvitePlexHomeLoading = false;
 
-// Charge slots.js dès que la page de configuration des slots est présente dans le DOM
-var _wizarrinviteSlotsLoading = false;
-$(document).ajaxComplete(function () {
+function wizarrinviteLazyLoad() {
+	// slots.js — Automatic Slots tab
 	if ($('#WIZARRINVITE-slots-config').length
 		&& typeof wizarrinviteRenderAllSlots === 'undefined'
 		&& !_wizarrinviteSlotsLoading) {
@@ -563,7 +509,48 @@ $(document).ajaxComplete(function () {
 			_wizarrinviteSlotsLoading = false;
 		});
 	}
+
+	// settings-users.js — User Check section
+	if ($('#wizarrinvite-check-users-btn').length
+		&& typeof _wizarrinviteUsersModuleLoaded === 'undefined'
+		&& !_wizarrinviteUsersLoading) {
+		_wizarrinviteUsersLoading = true;
+		$.getScript('api/v2/plugins/wizarrinvite/js/settings-users').done(function () {
+			window._wizarrinviteUsersModuleLoaded = true;
+		}).fail(function () {
+			_wizarrinviteUsersLoading = false;
+		});
+	}
+
+	// settings-cache.js — Cache Status section
+	if ($('#wizarrinvite-cache-status-tbody').length
+		&& typeof wizarrinviteStartCacheStatusTimers === 'undefined'
+		&& !_wizarrinviteCacheLoading) {
+		_wizarrinviteCacheLoading = true;
+		$.getScript('api/v2/plugins/wizarrinvite/js/settings-cache').fail(function () {
+			_wizarrinviteCacheLoading = false;
+		});
+	}
+
+	// settings-plex-home.js — Plex Home Users section
+	if ($('#wizarrinvite-plex-home-list').length
+		&& typeof wizarrinviteLoadPlexHomeUsers === 'undefined'
+		&& !_wizarrinvitePlexHomeLoading) {
+		_wizarrinvitePlexHomeLoading = true;
+		$.getScript('api/v2/plugins/wizarrinvite/js/settings-plex-home').fail(function () {
+			_wizarrinvitePlexHomeLoading = false;
+		});
+	}
+}
+
+$(document).ajaxComplete(function () {
+	wizarrinviteLazyLoad();
 	wizarrinviteInitState();
+});
+
+$(document).ready(function () {
+	wizarrinviteInitState();
+	wizarrinviteLazyLoad();
 });
 
 // ── Accordéon "par serveur" dans Check Users ─────────────────────────────────
@@ -576,6 +563,6 @@ $(document).on('click.wizarrinvite', '.wizarrinvite-srv-toggle', function () {
 	$list.toggle();
 });
 
-// ══════════════════════════════════════════════════════════════════════════════
+// ── Cache status handlers are in includes/js/settings-cache.js (loaded lazily) ─
 // FIN — le gestionnaire de slots est dans includes/js/slots.js
 // ══════════════════════════════════════════════════════════════════════════════

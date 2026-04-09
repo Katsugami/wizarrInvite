@@ -50,21 +50,23 @@ function wizarrinviteCollectSlotData(slotId) {
 		min_group:            $('#wizarr-slot-' + slotId + '-min-group').val()         || '5',
 		expiration:           $('#wizarr-slot-' + slotId + '-expiration').val()        || '1',
 		access_days:          $('#wizarr-slot-' + slotId + '-access-days').val()       || '7',
-		max_users:            $('#wizarr-slot-' + slotId + '-max-users').val()          || '100',
-		server_count:         $('#wizarr-slot-' + slotId + '-server-count').val()       || '1',
+		max_users:            $('#wizarr-slot-' + slotId + '-max-users').val(),
 		bundle_id:            $('#wizarr-slot-' + slotId + '-bundle-id').val()            || '',
 		server_ids:           $('#WIZARRINVITE-slot-' + slotId + '-server-ids').val()  || '',
 		library_ids:          $('#WIZARRINVITE-slot-' + slotId + '-library-ids').val() || '',
 		allow_downloads:      $('#wizarr-slot-' + slotId + '-allow-downloads').is(':checked'),
 		allow_live_tv:        $('#wizarr-slot-' + slotId + '-allow-live-tv').is(':checked'),
 		allow_mobile_uploads: $('#wizarr-slot-' + slotId + '-allow-mobile-uploads').is(':checked'),
+		show_user_count:      $('#wizarr-slot-' + slotId + '-show-user-count').is(':checked'),
+		deferred_count:       $('#wizarr-slot-' + slotId + '-deferred-count').is(':checked'),
+		common_servers:       $('#wizarr-slot-' + slotId + '-common-servers').is(':checked'),
 	};
 }
 
 /**
  * Parcourt tous les slots affichés, collecte leurs données et met à jour
  * le champ caché WIZARRINVITE-slots-config.
- * Valide les champs numériques avant l'écriture (max_users, server_count).
+ * Valide les champs numériques avant l'écriture (max_users).
  */
 function wizarrinviteSyncAllSlots() {
 	var slots = [];
@@ -73,14 +75,11 @@ function wizarrinviteSyncAllSlots() {
 		if (!isNaN(slotId)) {
 			var data = wizarrinviteCollectSlotData(slotId);
 
-			// Validation : max_users et server_count doivent être des entiers positifs
-			// En cas de valeur invalide on conserve la valeur par défaut pour éviter
-			// de bloquer la sauvegarde ou de créer une config incohérente côté PHP.
-			if (isNaN(parseInt(data.max_users, 10)) || parseInt(data.max_users, 10) < 1) {
-				data.max_users = '100';
-			}
-			if (isNaN(parseInt(data.server_count, 10)) || parseInt(data.server_count, 10) < 1) {
-				data.server_count = '1';
+			// max_users : chaîne vide = infini (pas de limite).
+			// On n'accepte que les entiers positifs ou la chaîne vide.
+			var parsedMax = parseInt(data.max_users, 10);
+			if (data.max_users !== '' && (isNaN(parsedMax) || parsedMax < 1)) {
+				data.max_users = '';
 			}
 
 			slots.push(data);
@@ -101,9 +100,15 @@ function wizarrinviteRenderSlot(slot) {
 	var serverIds  = slot.server_ids  || '';
 	var libraryIds = slot.library_ids || '';
 
-	var maxUsers    = String(slot.max_users    || '100');
-	var serverCount = String(slot.server_count || '1');
-	var bundleId    = String(slot.bundle_id    || '');
+	// max_users vide = infini (∞) — pas de limite d'utilisateurs
+	var maxUsers      = (slot.max_users !== undefined && slot.max_users !== null) ? String(slot.max_users) : '';
+	var bundleId      = String(slot.bundle_id    || '');
+	// show_user_count absent sur les anciens slots → true (rétrocompatibilité)
+	var showUserCount  = (slot.show_user_count  !== undefined) ? !!slot.show_user_count  : true;
+	// deferred_count absent sur les anciens slots → false
+	var deferredCount  = (slot.deferred_count   !== undefined) ? !!slot.deferred_count   : false;
+	// common_servers absent sur les anciens slots → false
+	var commonServers  = (slot.common_servers   !== undefined) ? !!slot.common_servers   : false;
 
 	var expirationOptions = [
 		['1',     '1 day'],
@@ -173,22 +178,50 @@ function wizarrinviteRenderSlot(slot) {
 				'</div>' +
 			'</div>' +
 
-			// Max users + Server count
-			'<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">' +
-				'<div>' +
-					'<label style="display:block; margin-bottom:4px;">Max Users</label>' +
-					'<input type="text" id="wizarr-slot-' + id + '-max-users" ' +
-						'class="form-control wizarr-slot-field" data-slot-id="' + id + '" ' +
-						'value="' + maxUsers + '" placeholder="100">' +
-					'<div style="margin-top:3px; font-size:11px; opacity:.6;">Total limit (all servers combined).</div>' +
-				'</div>' +
-				'<div>' +
-					'<label style="display:block; margin-bottom:4px;">Server Count</label>' +
-					'<input type="text" id="wizarr-slot-' + id + '-server-count" ' +
-						'class="form-control wizarr-slot-field" data-slot-id="' + id + '" ' +
-						'value="' + serverCount + '" placeholder="1">' +
-					'<div style="margin-top:3px; font-size:11px; opacity:.6;">Servers sharing one account (effective = total ÷ count).</div>' +
-				'</div>' +
+			// Max users
+			'<div style="margin-bottom:10px;">' +
+				'<label style="display:block; margin-bottom:4px;">Max Users</label>' +
+				'<input type="text" id="wizarr-slot-' + id + '-max-users" ' +
+					'class="form-control wizarr-slot-field" data-slot-id="' + id + '" ' +
+					'style="max-width:180px;" ' +
+					'value="' + maxUsers + '" placeholder="∞ = no limit">' +
+				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Empty = no limit (∞). Requires Show User Count. User count is deduplicated across servers automatically.</div>' +
+			'</div>' +
+
+			// Show User Count (standalone row, above Bundle)
+			'<div style="margin-bottom:10px;">' +
+				'<label class="wz-toggle">' +
+					'<input type="checkbox" id="wizarr-slot-' + id + '-show-user-count" ' +
+						'class="wizarr-slot-field" data-slot-id="' + id + '" ' +
+						(showUserCount ? 'checked' : '') + '>' +
+					'<span class="wz-toggle-track"></span>' +
+					'<span>Show User Count</span>' +
+				'</label>' +
+				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Display user count on the invite page and enforce the max limit.</div>' +
+			'</div>' +
+
+			// Deferred Count Check (standalone row, below Show User Count)
+			'<div style="margin-bottom:10px;">' +
+				'<label class="wz-toggle">' +
+					'<input type="checkbox" id="wizarr-slot-' + id + '-deferred-count" ' +
+						'class="wizarr-slot-field" data-slot-id="' + id + '" ' +
+						(deferredCount ? 'checked' : '') + '>' +
+					'<span class="wz-toggle-track"></span>' +
+					'<span>Deferred Count Check</span>' +
+				'</label>' +
+				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Use cached user count (interval set in Count Cache tab). Fast invite creation.</div>' +
+			'</div>' +
+
+			// Common Servers (standalone row, below Deferred Count)
+			'<div style="margin-bottom:10px;">' +
+				'<label class="wz-toggle">' +
+					'<input type="checkbox" id="wizarr-slot-' + id + '-common-servers" ' +
+						'class="wizarr-slot-field" data-slot-id="' + id + '" ' +
+						(commonServers ? 'checked' : '') + '>' +
+					'<span class="wz-toggle-track"></span>' +
+					'<span>Common Servers</span>' +
+				'</label>' +
+				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Selected servers share the same Plex account (same users). Deduplication is applied across servers. If off, each server is counted independently and the highest count is used.</div>' +
 			'</div>' +
 
 			// Bundle
@@ -201,7 +234,7 @@ function wizarrinviteRenderSlot(slot) {
 				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Empty = default bundle. 1 = first bundle, 2 = second, etc.</div>' +
 			'</div>' +
 
-			// Options — toggles style Organizr
+			// Options — toggles
 			'<div style="display:flex; gap:18px; margin-bottom:12px; flex-wrap:wrap;">' +
 				'<label class="wz-toggle">' +
 					'<input type="checkbox" id="wizarr-slot-' + id + '-allow-downloads" ' +
@@ -222,7 +255,7 @@ function wizarrinviteRenderSlot(slot) {
 						'class="wizarr-slot-field" data-slot-id="' + id + '" ' +
 						(slot.allow_mobile_uploads ? 'checked' : '') + '>' +
 					'<span class="wz-toggle-track"></span>' +
-					'<span>Allow Mobile Uploads</span>' +
+					'<span>Allow Mobile Uploads <span style="font-size:10px; opacity:.55;">(Plex only)</span></span>' +
 				'</label>' +
 			'</div>' +
 
@@ -298,11 +331,13 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-add-slot-btn', function (e) 
 		min_group:            '5',
 		expiration:           '1',
 		access_days:          '7',
-		max_users:            '100',
-		server_count:         '1',
+		max_users:            '',       // vide = infini (∞)
 		bundle_id:            '',
 		server_ids:           '',
 		library_ids:          '',
+		show_user_count:      true,
+		deferred_count:       false,
+		common_servers:       false,
 		allow_downloads:      false,
 		allow_live_tv:        false,
 		allow_mobile_uploads: false,
@@ -381,50 +416,101 @@ $(document).on('click.wizarrinvite', '.wizarr-check-slot-btn', function (e) {
 
 		// ── Bloc statistiques utilisateurs ───────────────────────────────────
 		if (statsRes && statsRes.response && statsRes.response.result === 'success') {
-			var sd         = statsRes.response.data || {};
-			var pct        = sd.max ? Math.min(100, Math.round(sd.count / sd.max * 100)) : 0;
-			var limitColor = sd.limit_reached ? '#f87171' : pct >= 80 ? '#f59e0b' : '#22c55e';
+			var sd             = statsRes.response.data || {};
+			var perSrv         = sd.per_server_counts  || {};
+			var srvNames       = sd.server_names       || [];
+			var commonSrv      = !!sd.common_servers;
+			var perSrvKeys     = Object.keys(perSrv);
+			var limitColor     = sd.limit_reached ? '#f87171' : '#22c55e';
 
 			statsHtml += '<div style="background:rgba(255,255,255,.04); border-radius:8px; padding:6px 10px; margin-bottom:8px;">';
-			statsHtml += '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">';
-			statsHtml += '<span>👥 Utilisateurs (effectif)</span>';
-			statsHtml += '<span style="color:' + limitColor + '; font-weight:700;">' + sd.count + ' / ' + sd.max + '</span>';
-			statsHtml += '</div>';
-			statsHtml += '<div style="height:5px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden;">';
-			statsHtml += '<div style="height:100%; width:' + pct + '%; background:' + limitColor + '; border-radius:999px;"></div>';
-			statsHtml += '</div>';
-			if (sd.server_count > 1) {
-				statsHtml += '<div style="font-size:11px; opacity:.6; margin-top:3px;">total brut : ' + sd.raw_count + ' ÷ ' + sd.server_count + ' serveurs</div>';
+
+			if (perSrvKeys.length > 0) {
+				if (commonSrv) {
+					// Serveurs partagés → afficher "SRV1, SRV2 : X / max"
+					var pct = sd.max ? Math.min(100, Math.round(sd.count / sd.max * 100)) : 0;
+					limitColor = sd.limit_reached ? '#f87171' : pct >= 80 ? '#f59e0b' : '#22c55e';
+					statsHtml += '<div style="font-size:11px; opacity:.6; margin-bottom:4px;">' + srvNames.join(', ') + ' (shared)</div>';
+					statsHtml += '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">';
+					statsHtml += '<span>👥 Members</span>';
+					statsHtml += '<span style="color:' + limitColor + '; font-weight:700;">' + sd.count + (sd.max ? ' / ' + sd.max : '') + '</span>';
+					statsHtml += '</div>';
+					if (sd.max) {
+						statsHtml += '<div style="height:5px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden; margin-bottom:4px;">';
+						statsHtml += '<div style="height:100%; width:' + pct + '%; background:' + limitColor + '; border-radius:999px;"></div>';
+						statsHtml += '</div>';
+					}
+					// Per-server breakdown (small text)
+					perSrvKeys.forEach(function(name) {
+						statsHtml += '<div style="font-size:11px; opacity:.6;">' + name + ': ' + perSrv[name] + ' records</div>';
+					});
+				} else {
+					// Serveurs indépendants → afficher chaque serveur séparément
+					statsHtml += '<div style="font-size:12px; font-weight:600; margin-bottom:6px;">👥 Members per server</div>';
+					perSrvKeys.forEach(function(name) {
+						var c    = perSrv[name];
+						var pct2 = sd.max ? Math.min(100, Math.round(c / sd.max * 100)) : 0;
+						var col2 = (sd.max && c >= sd.max) ? '#f87171' : (pct2 >= 80 ? '#f59e0b' : '#22c55e');
+						statsHtml += '<div style="margin-bottom:5px;">';
+						statsHtml += '<div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:2px;">';
+						statsHtml += '<span>' + name + '</span>';
+						statsHtml += '<span style="color:' + col2 + '; font-weight:700;">' + c + (sd.max ? ' / ' + sd.max : '') + '</span>';
+						statsHtml += '</div>';
+						if (sd.max) {
+							statsHtml += '<div style="height:4px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden;">';
+							statsHtml += '<div style="height:100%; width:' + pct2 + '%; background:' + col2 + '; border-radius:999px;"></div>';
+							statsHtml += '</div>';
+						}
+						statsHtml += '</div>';
+					});
+				}
+			} else {
+				// Pas de filtre serveur — afficher le total
+				var pct0 = sd.max ? Math.min(100, Math.round(sd.count / sd.max * 100)) : 0;
+				limitColor = sd.limit_reached ? '#f87171' : pct0 >= 80 ? '#f59e0b' : '#22c55e';
+				statsHtml += '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">';
+				statsHtml += '<span>👥 Users (deduplicated)</span>';
+				statsHtml += '<span style="color:' + limitColor + '; font-weight:700;">' + sd.count + (sd.max ? ' / ' + sd.max : '') + '</span>';
+				statsHtml += '</div>';
+				if (sd.max) {
+					statsHtml += '<div style="height:5px; border-radius:999px; background:rgba(255,255,255,.1); overflow:hidden; margin-bottom:4px;">';
+					statsHtml += '<div style="height:100%; width:' + pct0 + '%; background:' + limitColor + '; border-radius:999px;"></div>';
+					statsHtml += '</div>';
+				}
 			}
+
 			if (sd.limit_reached) {
-				statsHtml += '<div style="font-size:11px; color:#f87171; margin-top:3px;">⚠️ Limite atteinte — création d\'invitation bloquée</div>';
+				statsHtml += '<div style="font-size:11px; color:#f87171; margin-top:4px;">⚠️ User limit reached — invite creation blocked</div>';
 			}
 			if (sd.next_expiry) {
-				statsHtml += '<div style="font-size:11px; opacity:.6; margin-top:3px;">⏰ Prochaine expiration : ' + sd.next_expiry + '</div>';
+				statsHtml += '<div style="font-size:11px; opacity:.6; margin-top:3px;">⏰ Next expiry: ' + sd.next_expiry + '</div>';
+			}
+			if (sd.deferred) {
+				statsHtml += '<div style="font-size:11px; opacity:.5; margin-top:3px;">📦 Deferred (cached' + (sd.cache_age_s != null ? ', ' + Math.round(sd.cache_age_s / 60) + ' min ago' : '') + ')</div>';
 			}
 			statsHtml += '</div>';
 		}
 
 		// ── Bloc code d'invitation ────────────────────────────────────────────
 		if (!currentRes || !currentRes.response) {
-			$r.html(statsHtml + '<span style="color:red;">❌ Réponse invalide</span>');
+			$r.html(statsHtml + '<span style="color:red;">❌ Invalid response</span>');
 			return;
 		}
 		if (currentRes.response.result === 'success') {
 			var cd = currentRes.response.data || {};
 			$r.html(
 				statsHtml +
-				'<div style="color:lime; margin-bottom:4px; font-size:12px;">✅ Slot #' + slotId + ' prêt</div>' +
-				'<div style="font-size:12px;"><strong>Code :</strong> ' + (cd.code || '-') + '</div>' +
-				'<div style="font-size:12px;"><strong>URL :</strong> '  + (cd.url  || '-') + '</div>'
+				'<div style="color:lime; margin-bottom:4px; font-size:12px;">✅ Slot #' + slotId + ' ready</div>' +
+				'<div style="font-size:12px;"><strong>Code:</strong> ' + (cd.code || '-') + '</div>' +
+				'<div style="font-size:12px;"><strong>URL:</strong> '  + (cd.url  || '-') + '</div>'
 			);
 		} else {
-			$r.html(statsHtml + '<span style="color:red;">❌ ' + (currentRes.response.message || 'Erreur') + '</span>');
+			$r.html(statsHtml + '<span style="color:red;">❌ ' + (currentRes.response.message || 'Error') + '</span>');
 		}
 
 	}).fail(function () {
 		// Au moins une des deux requêtes a échoué
-		$r.html('<span style="color:red;">❌ Impossible de vérifier le slot #' + slotId + '</span>');
+		$r.html('<span style="color:red;">❌ Unable to check slot #' + slotId + '</span>');
 	});
 
 	return false;

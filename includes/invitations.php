@@ -57,7 +57,8 @@ function wizarrinvite_delete_invite($cfg, $inviteId)
     }
 
     $result = wizarrinvite_request($baseUrl, $apiKey, 'DELETE', 'invitations/' . rawurlencode((string)$inviteId));
-    $ok     = in_array((int)$result['http'], [200, 202, 204], true);
+    // 404 / 410 = already gone from Wizarr → treat as success
+    $ok     = in_array((int)$result['http'], [200, 202, 204, 404, 410], true);
 
     return [
         'ok'      => $ok,

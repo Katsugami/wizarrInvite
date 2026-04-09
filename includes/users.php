@@ -231,41 +231,142 @@ function wizarrinvite_check_server_availability($baseUrl, $apiKey, $selectedServ
 }
 
 /**
- * Filtre et déduplique une liste d'utilisateurs pour un ensemble de serveurs.
+ * Déduplique une liste d'utilisateurs en groupes de personnes uniques.
  *
- * Utilise le champ User.server (nom du serveur) pour filtrer.
- * Déduplique par email > username > id interne pour éviter de compter
- * deux fois un utilisateur présent sur plusieurs serveurs du slot.
+ * Règles de déduplication (par ordre de priorité) :
+ *  1. Même email non vide (email != "empty") → même personne, toujours
+ *  2. Même username + au moins un email vide  → probablement même personne, auto-merge
+ *  3. Même username + emails différents non vides → personnes différentes + flag ambiguous
  *
- * @param  array    $allUsers        Liste brute de GET /api/users
- * @param  string[] $serverNames     Noms des serveurs à cibler
- * @return array  ['users' => [...], 'count' => N]
+ * @param  array $users  Liste brute de GET /api/users (déjà filtrée si nécessaire)
+ * @return array{count: int, groups: array, ambiguous: array}
  */
-function wizarrinvite_filter_users_for_servers(array $allUsers, array $serverNames)
+function wizarrinvite_deduplicate_users(array $users)
 {
-    $seen          = [];
-    $filteredUsers = [];
+    $groups     = [];
+    $emailIndex = [];  // email_lower → group_idx
+    $nameIndex  = [];  // name_lower  → [group_idx, ...]
+    $ambiguous  = [];
 
-    foreach ($allUsers as $user) {
+    foreach ($users as $user) {
         if (!is_array($user)) {
             continue;
         }
-        $userServer = $user['server'] ?? '';
-        if (!in_array($userServer, $serverNames, true)) {
-            continue;
+
+        $uid      = (int)($user['id'] ?? 0);
+        $uname    = trim($user['username'] ?? '');
+        $rawEmail = trim($user['email'] ?? '');
+        $server   = $user['server']      ?? '';
+        $stype    = $user['server_type'] ?? '';
+        $expires  = $user['expires']     ?? null;
+        $uLow     = ($uname !== '') ? mb_strtolower($uname) : '';
+        $hasEmail = ($rawEmail !== '' && strcasecmp($rawEmail, 'empty') !== 0);
+        $eLow     = $hasEmail ? mb_strtolower($rawEmail) : '';
+
+        $matchIdx = null;
+
+        // Phase 1 : match par email
+        if ($eLow !== '' && isset($emailIndex[$eLow])) {
+            $matchIdx = $emailIndex[$eLow];
         }
-        // Clé de déduplication : email > username > id interne
-        $key = strtolower(trim((string)($user['email'] ?? $user['username'] ?? '')));
-        if ($key === '') {
-            $key = 'uid_' . ($user['id'] ?? uniqid('', true));
+
+        // Phase 2 : match par username (pas de conflit d'email)
+        if ($matchIdx === null && $uLow !== '' && isset($nameIndex[$uLow])) {
+            foreach ($nameIndex[$uLow] as $candIdx) {
+                $emailConflict = false;
+                if ($eLow !== '') {
+                    foreach ($groups[$candIdx]['emails'] as $existingE) {
+                        if ($existingE !== '' && $existingE !== $eLow) {
+                            $emailConflict = true;
+                            break;
+                        }
+                    }
+                }
+                if (!$emailConflict) {
+                    $matchIdx = $candIdx;
+                    break;
+                } else {
+                    // Même nom, emails différents → signaler sans fusionner
+                    $ambiguous[] = [
+                        'username'         => $uname,
+                        'new_id'           => $uid,
+                        'new_server'       => $server,
+                        'new_email'        => $rawEmail,
+                        'existing_ids'     => $groups[$candIdx]['ids'],
+                        'existing_servers' => $groups[$candIdx]['servers'],
+                        'existing_email'   => $groups[$candIdx]['emails'][0] ?? '',
+                    ];
+                }
+            }
         }
-        if (!isset($seen[$key])) {
-            $seen[$key]      = true;
-            $filteredUsers[] = $user;
+
+        if ($matchIdx !== null) {
+            $groups[$matchIdx]['ids'][]         = $uid;
+            $groups[$matchIdx]['servers'][]      = $server;
+            $groups[$matchIdx]['server_types'][] = $stype;
+            if ($expires !== null) {
+                $groups[$matchIdx]['expires'][] = $expires;
+            }
+            if ($eLow !== '' && !in_array($eLow, $groups[$matchIdx]['emails'], true)) {
+                $groups[$matchIdx]['emails'][]  = $eLow;
+                $emailIndex[$eLow]              = $matchIdx;
+            }
+            if ($uLow !== '' && !in_array($matchIdx, $nameIndex[$uLow] ?? [], true)) {
+                $nameIndex[$uLow][]             = $matchIdx;
+            }
+        } else {
+            $newIdx         = count($groups);
+            $groups[$newIdx] = [
+                'ids'          => [$uid],
+                'username'     => $uname,
+                'emails'       => $eLow !== '' ? [$eLow] : [],
+                'servers'      => [$server],
+                'server_types' => [$stype],
+                'expires'      => $expires !== null ? [$expires] : [],
+            ];
+            if ($eLow !== '') {
+                $emailIndex[$eLow] = $newIdx;
+            }
+            if ($uLow !== '') {
+                $nameIndex[$uLow][] = $newIdx;
+            }
         }
     }
 
-    return ['users' => $filteredUsers, 'count' => count($filteredUsers)];
+    return [
+        'count'     => count($groups),
+        'groups'    => array_values($groups),
+        'ambiguous' => $ambiguous,
+    ];
+}
+
+/**
+ * Filtre et déduplique une liste d'utilisateurs pour un ensemble de serveurs.
+ *
+ * Utilise le champ User.server (nom du serveur) pour filtrer, puis
+ * déduplique correctement via wizarrinvite_deduplicate_users (gère email "empty").
+ *
+ * @param  array    $allUsers     Liste brute de GET /api/users
+ * @param  string[] $serverNames  Noms des serveurs à cibler
+ * @return array  ['users' => [...], 'count' => N, 'groups' => [...], 'ambiguous' => [...]]
+ */
+function wizarrinvite_filter_users_for_servers(array $allUsers, array $serverNames)
+{
+    $filtered = [];
+    foreach ($allUsers as $user) {
+        if (is_array($user) && in_array($user['server'] ?? '', $serverNames, true)) {
+            $filtered[] = $user;
+        }
+    }
+
+    $dedup = wizarrinvite_deduplicate_users($filtered);
+
+    return [
+        'users'     => $filtered,          // Enregistrements bruts pour calcul d'expiration
+        'count'     => $dedup['count'],
+        'groups'    => $dedup['groups'],
+        'ambiguous' => $dedup['ambiguous'],
+    ];
 }
 
 /**
@@ -301,7 +402,7 @@ function wizarrinvite_resolve_server_names(array $allServers, array $serverIds)
  * @param  array $cfg
  * @return array{ok: bool, message: string, data: array|null}
  */
-function wizarrinvite_user_stats($cfg)
+function wizarrinvite_user_stats($cfg, $trigger = 'api')
 {
     $baseUrl = rtrim($cfg['WIZARRINVITE-url'] ?? '', '/');
     $apiKey  = trim($cfg['WIZARRINVITE-api-key'] ?? '');
@@ -310,28 +411,44 @@ function wizarrinvite_user_stats($cfg)
         return ['ok' => false, 'message' => 'Configuration missing', 'data' => null];
     }
 
-    // ── Tentative via /users ──────────────────────────────────────────────────
-    // Timeout réduit à 8 s (+ connectTimeout automatique à 5 s dans wizarrinvite_request).
-    // Évite de bloquer longtemps si un serveur Plex est inaccessible.
-    $usersResult = wizarrinvite_request($baseUrl, $apiKey, 'GET', 'users', null, 8);
+    // ── Requête GET /users — timeout 0 = illimité (l'API peut être très lente) ──
+    $usersResult = wizarrinvite_request($baseUrl, $apiKey, 'GET', 'users', null, 0);
+    $httpCode    = (int)$usersResult['http'];
 
-    if ((int)$usersResult['http'] === 200) {
+    if ($httpCode !== 200) {
+        wizarrinvite_log('warn', 'GET /users failed — HTTP ' . $httpCode
+            . ($usersResult['curl_error'] ? ' / cURL: ' . $usersResult['curl_error'] : '')
+            . ' — falling back to /status');
+    }
+
+    if ($httpCode === 200) {
         $allUsers = is_array($usersResult['body']['users'] ?? null) ? $usersResult['body']['users'] : [];
 
-        // Décompte + liste par nom de serveur (champ User.server)
-        $perServer      = [];
-        $usersByServer  = [];
+        if (empty($allUsers)) {
+            wizarrinvite_log('warn', 'GET /users returned HTTP 200 but users array is empty or missing');
+        }
+
+        // Sauvegarder les users bruts en cache pour les slots (réutilisation sans nouvel appel API)
+        if (!empty($allUsers)) {
+            wizarrinvite_save_users_cache($allUsers, $trigger);
+        }
+
+        // Inject Plex Home virtual users (after cache save — don't persist PH in users cache)
+        $plexHomeUsers = wizarrinvite_build_virtual_plex_home_users();
+        if (!empty($plexHomeUsers)) {
+            $allUsers = array_merge($allUsers, $plexHomeUsers);
+        }
+
+        // Déduplication globale + décompte par serveur (User.server) avec PH inclus
+        $dedup         = wizarrinvite_deduplicate_users($allUsers);
+        $perServer     = [];
+        $usersByServer = [];
 
         foreach ($allUsers as $user) {
-            if (!is_array($user)) {
-                continue;
-            }
+            if (!is_array($user)) continue;
             $serverName = trim($user['server'] ?? '');
-            if ($serverName === '') {
-                $serverName = 'Unknown';
-            }
+            if ($serverName === '') $serverName = 'Unknown';
             $perServer[$serverName] = ($perServer[$serverName] ?? 0) + 1;
-
             $usersByServer[$serverName][] = [
                 'username' => $user['username'] ?? ($user['email'] ?? '?'),
                 'email'    => $user['email']    ?? '',
@@ -340,28 +457,42 @@ function wizarrinvite_user_stats($cfg)
         }
         arsort($perServer);
 
+        wizarrinvite_log('info', 'GET /users — ' . count($allUsers) . ' records / '
+            . $dedup['count'] . ' unique / '
+            . count($perServer) . ' servers: ' . implode(', ', array_keys($perServer))
+            . ' — trigger: ' . $trigger);
+
         return [
             'ok'      => true,
             'message' => 'User stats loaded',
             'data'    => [
                 'count'           => count($allUsers),
+                'unique_count'    => $dedup['count'],
                 'next_expiry'     => wizarrinvite_find_next_expiry($allUsers),
                 'per_server'      => $perServer,
                 'users_by_server' => $usersByServer,
+                'groups'          => $dedup['groups'],
+                'ambiguous'       => $dedup['ambiguous'],
             ],
         ];
     }
 
-    // ── Repli sur /status ─────────────────────────────────────────────────────
+    // ── Repli sur /status (pas de décompte par serveur possible) ─────────────
     $statusResult = wizarrinvite_request($baseUrl, $apiKey, 'GET', 'status');
+    $fallbackCount = (int)($statusResult['body']['users'] ?? 0);
 
     return [
         'ok'      => true,
-        'message' => 'User stats loaded (status fallback)',
+        'message' => 'User stats loaded (status fallback — /users unavailable)',
         'data'    => [
-            'count'       => (int)($statusResult['body']['users'] ?? 0),
-            'next_expiry' => null,
-            'per_server'  => [],
+            'count'              => $fallbackCount,
+            'unique_count'       => null,
+            'next_expiry'        => null,
+            'per_server'         => [],
+            'users_by_server'    => [],
+            'groups'             => [],
+            'ambiguous'          => [],
+            'fallback'           => true,
         ],
     ];
 }

@@ -25,7 +25,24 @@ function wizarrinvite_log(string $level, string $message, array $ctx = []): void
     wizarrinvite_ensure_cache_dir();
     $path = wizarrinvite_log_path();
 
-    $line = date('Y-m-d H:i:s') . ' [' . strtoupper($level) . '] ' . $message;
+    // Determine timezone (resolved once per PHP process, then cached)
+    static $logTz = null;
+    if ($logTz === null) {
+        // Priority: WIZARRINVITE-timezone plugin setting → Organizr global → PHP default
+        $resolved = '';
+        if (class_exists('WizarrInvite')) {
+            try {
+                $p = new WizarrInvite();
+                $resolved = trim((string)($p->config['WIZARRINVITE-timezone'] ?? ''));
+            } catch (Throwable $th) { /* ignore */ }
+        }
+        if ($resolved === '') {
+            $resolved = trim((string)($GLOBALS['config']['timezone'] ?? ''));
+        }
+        $logTz = ($resolved !== '' && @timezone_open($resolved)) ? $resolved : date_default_timezone_get();
+    }
+    $dt   = new DateTime('now', new DateTimeZone($logTz));
+    $line = $dt->format('Y-m-d H:i:s') . ' [' . strtoupper($level) . '] ' . $message;
     if ($ctx) {
         $line .= ' ' . json_encode($ctx, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
