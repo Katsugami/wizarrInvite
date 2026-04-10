@@ -283,13 +283,13 @@ function renderUserCounter(stats) {
 				pct = maxSrvCount > 0 ? Math.round(c / maxSrvCount * 100) : 100;
 				cls = "";
 			}
-			rows += "<div style='margin-bottom:8px;'>";
-			rows += "<div style='font-size:12px; font-weight:700; margin-bottom:3px;'>" + escapeHtml(name) + "</div>";
-			rows += "<div class='user-counter-numbers'>";
-			rows += "<span class='uc-current'>" + (unavailable ? "-" : c) + "</span>";
-			rows += "<span class='uc-sep'> / </span><span class='uc-max'>" + (max !== null ? max : "∞") + "</span>";
+			rows += "<div style=\'margin-bottom:8px;\'>";
+			rows += "<div style=\'font-size:12px; font-weight:700; margin-bottom:3px;\'>" + escapeHtml(name) + "</div>";
+			rows += "<div class=\'user-counter-numbers\'>";
+			rows += "<span class=\'uc-current\'>" + (unavailable ? "-" : c) + "</span>";
+			rows += "<span class=\'uc-sep\'> / </span><span class=\'uc-max\'>" + (max !== null ? max : "∞") + "</span>";
 			rows += "</div>";
-			rows += "<div class='user-bar'><div class='user-bar-fill" + cls + "' style='width:" + pct + "%'></div></div>";
+			rows += "<div class=\'user-bar\'><div class=\'user-bar-fill" + cls + "\' style=\'width:" + pct + "%\'></div></div>";
 			rows += "</div>";
 		});
 

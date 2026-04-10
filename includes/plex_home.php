@@ -7,7 +7,7 @@
 // fichier JSON séparé du cache users pour survivre aux vidages de cache.
 //
 // Fichier : wizarrinvite_plex_home.json
-// Format  : [{"id":"PH1","name":"Katsugami","servers":["NAS-K (Plex)","NAS-S (Plex)"]},...]
+// Format  : [{"id":"PH1","name":"Username","servers":["Server1 (Plex)","Server2 (Plex)"]},...]
 // ─────────────────────────────────────────────────────────────────────────────
 
 function wizarrinvite_plex_home_file()
