@@ -1,27 +1,29 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Cache Status — local time ticker + smart auto-refresh table
+// Cache Status — local time ticker + interval auto-check
 // Loaded dynamically by settings.js when the Cache Status section is present.
 // ─────────────────────────────────────────────────────────────────────────────
 
 var _wizarrinviteLocalTimeTimer    = null;
-var _wizarrinviteCacheStatusTimer  = null;
-var _wizarrinviteLastKnownInterval = null; // seconds, from last /cache-status response
+var _wizarrinviteCacheStatusTimer  = null;  // setTimeout handle (single-shot, rescheduled)
+var _wizarrinviteLastKnownInterval = null;  // seconds — set from /cache-status response
+var _wizarrinviteLastCheckAt       = 0;     // Unix timestamp of last user check
 
 // ── Auto-refresh state (localStorage) ────────────────────────────────────────
 function wizarrinviteIsAutoRefreshOn() {
 	return localStorage.getItem('wizarrinvite_autorefresh') !== 'off';
 }
 
-/**
- * Syncs the checkbox and localStorage state.
- * @param {boolean} on
- * @param {boolean} [skipStorage]  true = only update UI, don't write localStorage
- */
 function wizarrinviteSetAutoRefresh(on, skipStorage) {
-	if (!skipStorage) {
-		localStorage.setItem('wizarrinvite_autorefresh', on ? 'on' : 'off');
-	}
+	if (!skipStorage) localStorage.setItem('wizarrinvite_autorefresh', on ? 'on' : 'off');
 	$('#wizarrinvite-autorefresh-cb').prop('checked', on);
+}
+
+// ── Helper : set a "running" state on the last-check-info line ───────────────
+function wizarrinviteSetCheckingStatus(msg) {
+	var $info = $('#wizarrinvite-last-check-info');
+	if (!$info.length) return;
+	if ($info.data('ticker')) { clearInterval($info.data('ticker')); $info.removeData('ticker'); }
+	$info.html(msg || '⏳ <em>Auto check running…</em>');
 }
 
 // ── wz-toggle handler ─────────────────────────────────────────────────────────
@@ -30,11 +32,17 @@ $(document).on('change.wizarrinvite', '#wizarrinvite-autorefresh-cb', function (
 	var on = $(this).prop('checked');
 	localStorage.setItem('wizarrinvite_autorefresh', on ? 'on' : 'off');
 	if (on) {
-		// Immediately fetch status + check if a refresh is due
-		wizarrinviteAutoCheckIfDue(true);
-		wizarrinviteStartAutoRefreshTimer();
+		wizarrinviteSetCheckingStatus('⏳ <em>Auto check running…</em>');
+		// Run an immediate full check first.
+		// wizarrinviteRunFullCheck ends with wizarrinviteFetchCacheStatus, which sets
+		// _wizarrinviteLastKnownInterval and _wizarrinviteLastCheckAt.
+		// Only THEN schedule the next check with the correct interval.
+		wizarrinviteRunFullCheck(function () {
+			wizarrinviteScheduleNextCheck();
+		});
 	} else {
 		wizarrinviteStopAutoRefreshTimer();
+		wizarrinviteFetchCacheStatus();
 	}
 });
 
@@ -64,8 +72,10 @@ function wizarrinviteFormatTrigger(trigger) {
 
 // ── Fetch & render (passive — no Wizarr API call) ─────────────────────────────
 /**
- * Reads /cache-status and updates the table + last-check line.
- * @param {function} [onDone]  Called with the response data object, or null on failure.
+ * Reads /cache-status, updates the display, and stores the interval + last-check
+ * timestamp in globals so the scheduler can use them.
+ *
+ * @param {function} [onDone]  Called with the data object, or null on failure.
  */
 function wizarrinviteFetchCacheStatus(onDone) {
 	var $tbody = $('#wizarrinvite-cache-status-tbody');
@@ -88,39 +98,29 @@ function wizarrinviteFetchCacheStatus(onDone) {
 		var slots = d.slots || [];
 		var now   = Math.floor(Date.now() / 1000);
 
-		// Update interval display
+		// ── Store interval & last-check timestamp (used by scheduler) ─────────
 		var intervalSec = ((d.hours || 0) * 3600) + ((d.minutes || 0) * 60);
 		if (intervalSec < 60) intervalSec = 60;
-		$('#wizarrinvite-cache-interval').text((d.hours || 0) + 'h ' + (d.minutes || 0) + 'min');
-
-		// Restart timer if interval changed
-		if (_wizarrinviteLastKnownInterval !== null && _wizarrinviteLastKnownInterval !== intervalSec) {
-			wizarrinviteRestartAutoRefreshTimer(intervalSec);
-		}
 		_wizarrinviteLastKnownInterval = intervalSec;
 
-		// ── Last user check info ──────────────────────────────────────────────
-		var $lastCheck = $('#wizarrinvite-last-user-check');
-		if ($lastCheck.length) {
-			if (d.last_user_check_at) {
-				var ago = now - d.last_user_check_at;
-				var agoStr = wizarrinviteFormatDuration(ago, true);
-				var triggerLabel = wizarrinviteFormatTrigger(d.last_user_trigger);
-				$lastCheck.html('📋 Last user check: <strong>' + agoStr + '</strong> — <em>' + triggerLabel + '</em>');
-
-				// Also update the User Check section last-check-info if available
-				if (typeof wizarrinviteUpdateLastCheckInfo === 'function') {
-					wizarrinviteUpdateLastCheckInfo({
-						last_check_at: d.last_user_check_at,
-						last_trigger:  d.last_user_trigger,
-					});
-				}
-			} else {
-				$lastCheck.html('<span style="opacity:.4;">No user check recorded yet</span>');
-			}
+		if (d.last_user_check_at) {
+			_wizarrinviteLastCheckAt = d.last_user_check_at;
 		}
 
-		// ── Slot table — Slot + Cached count only ─────────────────────────────
+		// ── Update display ────────────────────────────────────────────────────
+		$('#wizarrinvite-cache-interval').text((d.hours || 0) + 'h ' + (d.minutes || 0) + 'min');
+
+		// ── Last user check info ─────────────────────────────────────────────
+		// Always update #wizarrinvite-last-check-info (Live User Check section)
+		// regardless of whether the legacy #wizarrinvite-last-user-check exists.
+		if (typeof wizarrinviteUpdateLastCheckInfo === 'function') {
+			wizarrinviteUpdateLastCheckInfo({
+				last_check_at: d.last_user_check_at || 0,
+				last_trigger:  d.last_user_trigger  || '',
+			});
+		}
+
+		// ── Slot table ────────────────────────────────────────────────────────
 		if (!slots.length) {
 			$tbody.html('<tr><td colspan="2" style="opacity:.5; padding:4px 6px;">No deferred slots configured.</td></tr>');
 			if (onDone) onDone(d);
@@ -158,91 +158,69 @@ function wizarrinviteFetchCacheStatus(onDone) {
 	});
 }
 
-// ── Smart interval check ──────────────────────────────────────────────────────
+// ── Full user check + slot cache refresh ─────────────────────────────────────
 /**
- * Fetches cache status. If the configured interval has elapsed since the last
- * user check, triggers /refresh-deferred-counts and updates the display again.
- *
- * @param {boolean} [immediate]  true = called on toggle-ON; false = timer tick
+ * Step 1: /user-stats?trigger=auto  — fetches fresh data from Wizarr.
+ * Step 2: /refresh-deferred-counts  — refreshes slot count caches.
+ * Step 3: wizarrinviteFetchCacheStatus — updates display + globals.
  */
-function wizarrinviteAutoCheckIfDue(immediate) {
-	wizarrinviteFetchCacheStatus(function (d) {
-		if (!d) return;
-
-		var now         = Math.floor(Date.now() / 1000);
-		var lastCheckAt = d.last_user_check_at || 0;
-		var intervalSec = _wizarrinviteLastKnownInterval || 900; // default 15min
-
-		var overdue = (lastCheckAt === 0) || ((now - lastCheckAt) >= intervalSec);
-
-		if (overdue) {
-			// Interval has elapsed — trigger a real Wizarr API check
-			$.ajax({
-				url: 'api/v2/plugins/wizarrinvite/refresh-deferred-counts',
-				method: 'GET',
-				dataType: 'json',
-				cache: false
-			}).always(function () {
-				wizarrinviteFetchCacheStatus(); // update display after refresh
-			});
-		}
-	});
-}
-
-// ── Manual force-refresh (⟳ button) ──────────────────────────────────────────
-/**
- * Always triggers /refresh-deferred-counts regardless of interval.
- * Only called by the manual ⟳ button.
- */
-function wizarrinviteRefreshCacheStatus() {
-	wizarrinviteFetchCacheStatus();
+function wizarrinviteRunFullCheck(onDone) {
 	$.ajax({
-		url: 'api/v2/plugins/wizarrinvite/refresh-deferred-counts',
+		url: 'api/v2/plugins/wizarrinvite/user-stats?trigger=auto',
 		method: 'GET',
 		dataType: 'json',
 		cache: false
 	}).always(function () {
-		wizarrinviteFetchCacheStatus();
+		$.ajax({
+			url: 'api/v2/plugins/wizarrinvite/refresh-deferred-counts',
+			method: 'GET',
+			dataType: 'json',
+			cache: false
+		}).always(function () {
+			wizarrinviteFetchCacheStatus(onDone || null);
+		});
 	});
 }
 
-// ── Timer management ──────────────────────────────────────────────────────────
+// ── Scheduler (setTimeout-based — one shot, rescheduled after each check) ────
 function wizarrinviteStopAutoRefreshTimer() {
 	if (_wizarrinviteCacheStatusTimer) {
-		clearInterval(_wizarrinviteCacheStatusTimer);
+		clearTimeout(_wizarrinviteCacheStatusTimer);
 		_wizarrinviteCacheStatusTimer = null;
 	}
 }
 
-function wizarrinviteStartAutoRefreshTimer() {
-	if (_wizarrinviteCacheStatusTimer) return;
+/**
+ * Schedules the NEXT auto-check by comparing the last check timestamp with the
+ * configured interval. Uses setTimeout (not setInterval) so each check starts
+ * a fresh countdown from the actual completion time of the previous check.
+ *
+ * Behaviour:
+ *  - Never checked yet, or check is overdue  → fires in 5 seconds
+ *  - Partially elapsed (e.g. 30 s of 120 s)  → fires in 90 seconds
+ *  - Just checked (elapsed ≈ 0)              → fires in intervalSec seconds
+ */
+function wizarrinviteScheduleNextCheck() {
+	wizarrinviteStopAutoRefreshTimer();
 	if (!wizarrinviteIsAutoRefreshOn()) return;
 
-	// Poll every min(intervalSec/2, 60s) — but at least 30s, at most 5min
-	var pollMs = _wizarrinviteLastKnownInterval !== null
-		? Math.min(Math.max(Math.floor(_wizarrinviteLastKnownInterval / 2) * 1000, 30000), 300000)
-		: 60000;
+	// Fall back to 60 s if interval somehow still unknown
+	var intervalSec = _wizarrinviteLastKnownInterval || 60;
+	var now         = Math.floor(Date.now() / 1000);
+	var elapsed     = now - (_wizarrinviteLastCheckAt || 0);
+	// If overdue or never checked → fire soon; otherwise wait the remainder
+	var waitSec     = (elapsed >= intervalSec) ? 5 : Math.max(5, intervalSec - elapsed);
 
-	_wizarrinviteCacheStatusTimer = setInterval(function () {
-		if (!$('#wizarrinvite-cache-status-tbody').length) {
-			wizarrinviteStopAutoRefreshTimer();
-			return;
-		}
-		if (!wizarrinviteIsAutoRefreshOn()) {
-			wizarrinviteStopAutoRefreshTimer();
-			return;
-		}
-		// Smart check: only calls Wizarr API if the interval has elapsed
-		wizarrinviteAutoCheckIfDue(false);
-	}, pollMs);
-}
-
-function wizarrinviteRestartAutoRefreshTimer(newIntervalSec) {
-	wizarrinviteStopAutoRefreshTimer();
-	_wizarrinviteLastKnownInterval = newIntervalSec;
-	if (wizarrinviteIsAutoRefreshOn()) {
-		wizarrinviteStartAutoRefreshTimer();
-	}
+	_wizarrinviteCacheStatusTimer = setTimeout(function () {
+		_wizarrinviteCacheStatusTimer = null;
+		if (!wizarrinviteIsAutoRefreshOn()) return;
+		// Show "running" status, then run the full check
+		wizarrinviteSetCheckingStatus('⏳ <em>Auto check running…</em>');
+		wizarrinviteRunFullCheck(function () {
+			// Schedule the next one after this check completes
+			wizarrinviteScheduleNextCheck();
+		});
+	}, waitSec * 1000);
 }
 
 // ── Local time ticker ─────────────────────────────────────────────────────────
@@ -267,22 +245,29 @@ function wizarrinviteStartLocalTimeTicker() {
 // ── Manual ⟳ button ───────────────────────────────────────────────────────────
 $(document).off('click.wizarrinvite', '#wizarrinvite-cache-status-refresh');
 $(document).on('click.wizarrinvite', '#wizarrinvite-cache-status-refresh', function () {
-	wizarrinviteRefreshCacheStatus();
+	wizarrinviteSetCheckingStatus('⏳ <em>Check running…</em>');
+	// After the manual check, reset the auto-check countdown from now
+	wizarrinviteRunFullCheck(function () {
+		if (wizarrinviteIsAutoRefreshOn()) {
+			wizarrinviteScheduleNextCheck();
+		}
+	});
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function wizarrinviteInitCacheStatus() {
-	// Sync checkbox with stored state (no localStorage write)
 	wizarrinviteSetAutoRefresh(wizarrinviteIsAutoRefreshOn(), true);
-
 	wizarrinviteStartLocalTimeTicker();
 
-	// Passive first load — only reads /cache-status
-	wizarrinviteFetchCacheStatus();
-
-	if (wizarrinviteIsAutoRefreshOn()) {
-		wizarrinviteStartAutoRefreshTimer();
-	}
+	// Fetch cache status to populate _wizarrinviteLastKnownInterval and
+	// _wizarrinviteLastCheckAt, then let the scheduler decide when to fire.
+	wizarrinviteFetchCacheStatus(function (d) {
+		if (!wizarrinviteIsAutoRefreshOn()) return;
+		// wizarrinviteScheduleNextCheck uses the globals set above:
+		//  - overdue or never checked → fires in 5 s
+		//  - partially elapsed        → fires at the right remaining time
+		wizarrinviteScheduleNextCheck();
+	});
 }
 
 if ($('#wizarrinvite-local-time').length) {

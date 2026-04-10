@@ -139,12 +139,16 @@ function wizarrinvite_fetch_slot_effective_count($baseUrl, $apiKey, $slotConfig,
         $allServers    = is_array($serversResult['body']['servers'] ?? null) ? $serversResult['body']['servers'] : [];
         $resolvedNames = wizarrinvite_resolve_server_names($allServers, $slotServerIds);
 
-        if (!empty($resolvedNames)) {
+        if (empty($resolvedNames)) {
+            wizarrinvite_log('warn', 'fetch_slot_effective_count — server IDs [' . implode(',', $slotServerIds) . '] did not resolve to any server name'
+                . ' (GET /servers HTTP ' . ($serversResult['http'] ?? '?') . ', ' . count($allServers) . ' servers returned)');
+        } else {
             // Per-server counts (always computed regardless of common_servers)
             foreach ($resolvedNames as $name) {
                 $sData = wizarrinvite_filter_users_for_servers($allUsers, [$name]);
                 $perServerCounts[$name] = $sData['count'];
             }
+            wizarrinvite_log('debug', 'fetch_slot_effective_count — resolved servers: ' . json_encode($perServerCounts));
 
             if ($commonServers) {
                 $filtered       = wizarrinvite_filter_users_for_servers($allUsers, $resolvedNames);
@@ -256,6 +260,9 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
     // show_user_count absent sur les anciens slots → true (rétrocompatibilité)
     $showCount = isset($slotConfig['show_user_count']) ? (bool)$slotConfig['show_user_count'] : true;
 
+    // show_next_expiry absent sur les anciens slots → false
+    $showNextExpiry = isset($slotConfig['show_next_expiry']) ? (bool)$slotConfig['show_next_expiry'] : false;
+
     if (!$baseUrl || !$apiKey) {
         return ['ok' => false, 'message' => 'Configuration missing', 'data' => null];
     }
@@ -266,12 +273,14 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
             'ok'      => true,
             'message' => 'User count tracking disabled',
             'data'    => [
-                'show_user_count' => false,
-                'limit_reached'   => false,
-                'count'           => null,
-                'max'             => null,
-                'slot_id'         => (int)($slotConfig['id']    ?? 0),
-                'slot_label'      => $slotConfig['label'] ?? ('Slot ' . ($slotConfig['id'] ?? 0)),
+                'show_user_count'  => false,
+                'show_next_expiry' => false,
+                'limit_reached'    => false,
+                'count'            => null,
+                'max'              => null,
+                'next_expiry'      => null,
+                'slot_id'          => (int)($slotConfig['id']    ?? 0),
+                'slot_label'       => $slotConfig['label'] ?? ('Slot ' . ($slotConfig['id'] ?? 0)),
             ],
         ];
     }
@@ -337,23 +346,34 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
 
         $limitReached = ($maxUsers !== null) && ($effectiveCountD !== null) && ($effectiveCountD >= $maxUsers);
 
+        // Calcul next_expiry depuis le cache users si l'option est activée
+        $nextExpiryD = null;
+        if ($showNextExpiry) {
+            $usersCache  = wizarrinvite_load_users_cache();
+            $cachedUsers = $usersCache ? ($usersCache['users'] ?? []) : [];
+            if (!empty($cachedUsers)) {
+                $nextExpiryD = wizarrinvite_find_next_expiry($cachedUsers);
+            }
+        }
+
         return [
             'ok'      => true,
             'message' => 'Slot user stats loaded (deferred)',
             'data'    => [
-                'count'           => $effectiveCountD,
-                'max'             => $maxUsers,
-                'show_user_count' => true,
-                'limit_reached'   => $limitReached,
-                'next_expiry'        => null,
-                'raw_count'          => $effectiveCountD,
-                'common_servers'     => $commonServers,
-                'per_server_counts'  => $perServerCountsD,
-                'server_names'       => $serverNamesD,
-                'deferred'           => true,
-                'cache_age_s'        => $cacheAge === PHP_INT_MAX ? null : $cacheAge,
-                'slot_id'            => $slotId,
-                'slot_label'         => $slotConfig['label'] ?? ('Slot ' . $slotId),
+                'count'            => $effectiveCountD,
+                'max'              => $maxUsers,
+                'show_user_count'  => true,
+                'show_next_expiry' => $showNextExpiry,
+                'limit_reached'    => $limitReached,
+                'next_expiry'      => $nextExpiryD,
+                'raw_count'        => $effectiveCountD,
+                'common_servers'   => $commonServers,
+                'per_server_counts'=> $perServerCountsD,
+                'server_names'     => $serverNamesD,
+                'deferred'         => true,
+                'cache_age_s'      => $cacheAge === PHP_INT_MAX ? null : $cacheAge,
+                'slot_id'          => $slotId,
+                'slot_label'       => $slotConfig['label'] ?? ('Slot ' . $slotId),
             ],
         ];
     }
@@ -385,12 +405,16 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
             $allServers    = is_array($serversResult['body']['servers'] ?? null) ? $serversResult['body']['servers'] : [];
             $resolvedNames = wizarrinvite_resolve_server_names($allServers, $slotServerIds);
 
-            if (!empty($resolvedNames)) {
+            if (empty($resolvedNames)) {
+                wizarrinvite_log('warn', 'Slot #' . $slotId . ' user_stats — server IDs [' . implode(',', $slotServerIds) . '] did not resolve'
+                    . ' (GET /servers HTTP ' . ($serversResult['http'] ?? '?') . ', ' . count($allServers) . ' servers returned)');
+            } else {
                 // Décompte par serveur (chaque serveur dédupliqué indépendamment)
                 foreach ($resolvedNames as $srvName) {
                     $sData = wizarrinvite_filter_users_for_servers($allUsers, [$srvName]);
                     $perServerCounts[$srvName] = $sData['count'];
                 }
+                wizarrinvite_log('debug', 'Slot #' . $slotId . ' user_stats — per-server: ' . json_encode($perServerCounts));
 
                 if ($commonServers) {
                     // Serveurs partagés (même compte) : déduplication globale
@@ -429,17 +453,18 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
             'ok'      => true,
             'message' => 'Slot user stats loaded',
             'data'    => [
-                'count'              => $effectiveCount,
-                'max'                => $maxUsers,
-                'show_user_count'    => true,
-                'limit_reached'      => $limitReached,
-                'next_expiry'        => wizarrinvite_find_next_expiry($usersForExpiry),
-                'raw_count'          => $totalCount,
-                'common_servers'     => $commonServers,
-                'per_server_counts'  => $perServerCounts,
-                'server_names'       => $resolvedNames,
-                'slot_id'            => $slotId,
-                'slot_label'         => $slotConfig['label'] ?? ('Slot ' . $slotId),
+                'count'            => $effectiveCount,
+                'max'              => $maxUsers,
+                'show_user_count'  => true,
+                'show_next_expiry' => $showNextExpiry,
+                'limit_reached'    => $limitReached,
+                'next_expiry'      => $showNextExpiry ? wizarrinvite_find_next_expiry($usersForExpiry) : null,
+                'raw_count'        => $totalCount,
+                'common_servers'   => $commonServers,
+                'per_server_counts'=> $perServerCounts,
+                'server_names'     => $resolvedNames,
+                'slot_id'          => $slotId,
+                'slot_label'       => $slotConfig['label'] ?? ('Slot ' . $slotId),
             ],
         ];
     }
@@ -457,14 +482,15 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
             'ok'      => true,
             'message' => 'Slot user stats loaded (status fallback)',
             'data'    => [
-                'count'           => $effectiveCount,
-                'max'             => $maxUsers,
-                'show_user_count' => true,
-                'limit_reached'   => $limitReached,
-                'next_expiry'     => null,
-                'raw_count'       => $totalCount,
-                'slot_id'         => (int)($slotConfig['id']    ?? 0),
-                'slot_label'      => $slotConfig['label'] ?? ('Slot ' . ($slotConfig['id'] ?? 0)),
+                'count'            => $effectiveCount,
+                'max'              => $maxUsers,
+                'show_user_count'  => true,
+                'show_next_expiry' => $showNextExpiry,
+                'limit_reached'    => $limitReached,
+                'next_expiry'      => null,
+                'raw_count'        => $totalCount,
+                'slot_id'          => (int)($slotConfig['id']    ?? 0),
+                'slot_label'       => $slotConfig['label'] ?? ('Slot ' . ($slotConfig['id'] ?? 0)),
             ],
         ];
     }
@@ -474,11 +500,12 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
         'ok'      => false,
         'message' => $result['http'] ? 'HTTP error ' . $result['http'] : 'Network error: ' . $result['curl_error'],
         'data'    => [
-            'count'         => null,
-            'max'           => $maxUsers,
-            'limit_reached' => false,
-            'next_expiry'   => null,
-            'unavailable'   => true,
+            'count'            => null,
+            'max'              => $maxUsers,
+            'show_next_expiry' => $showNextExpiry,
+            'limit_reached'    => false,
+            'next_expiry'      => null,
+            'unavailable'      => true,
         ],
     ];
 }

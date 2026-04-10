@@ -1,4 +1,4 @@
-# wizarrInvite – Organizr Plugin v2.0
+# wizarrInvite – Organizr Plugin v2.1
 
 <p align="center">
 <img src="wizarr.png" width="140">
@@ -10,7 +10,7 @@
 
 wizarrInvite is an Organizr plugin that lets you **generate and manage Wizarr invitation links directly from Organizr**.
 
-Version 2.0 introduces **Automatic Slots** — independent invitation channels, each with its own URL, settings, and user limit — alongside a debug log viewer, improved performance, and a cleaner settings UI.
+Version 2.1 builds on the Automatic Slots system introduced in v2.0, adding **next-expiry display**, **interval auto-check**, and a live **last-check status indicator** that updates in real time without any user interaction.
 
 ---
 
@@ -80,10 +80,53 @@ wizarrInvite/
     ├── display.php
     ├── debug.php
     └── js/
-        └── slots.js
+        ├── slots.js
+        ├── settings-cache.js
+        ├── settings-users.js
+        └── settings-plex-home.js
 ```
 
 Restart Organizr if necessary. The plugin will appear under **Settings → Plugins**.
+
+---
+
+## What's New in v2.1
+
+### Next Expiry Display
+
+Each slot now has a **Show Next Expiry** toggle. When enabled, the public display page shows the next member expiration date below the user counter:
+
+- **Limit not reached** → shows the next scheduled departure and number of days remaining
+- **Limit reached** → shows when the next slot will become available (next expiry date)
+- **No future expiry** → shows *"No upcoming expiration"* (all members have permanent access)
+
+Expiry is read from the Wizarr user data (the `expires`, `expiry`, `auth_expiry`, or similar fields depending on your Wizarr version). In deferred mode, the users cache is used so no extra API call is needed.
+
+### Interval Auto-Check — Reworked Scheduler
+
+The auto-check scheduler has been completely rewritten. It now uses a **comparison-based approach**:
+
+- At each tick, the scheduler computes `elapsed = now − lastCheckAt` and fires a check only when `elapsed ≥ interval`
+- Uses `setTimeout` (single-shot + reschedule) instead of `setInterval`, so the countdown starts from the **actual completion time** of the previous check — not from when the timer was created
+- On page load, if the last check is already overdue, a new check fires within 5 seconds automatically
+- If Organizr is reopened mid-interval, the scheduler resumes from where it left off and waits only the remaining time
+
+### Live "Last Check" Status — Always Visible
+
+The **Last Check** indicator in the *Live User Check* section now:
+
+- Appears automatically on page load without pressing *Show Cache*
+- Ticks every second, showing how long ago the last check ran and which trigger caused it (manual button, display page, auto refresh, API)
+- Shows `⏳ Auto check running…` while a check is in progress
+- Updates immediately when the check completes
+
+### Per-Server Bars Always Shown
+
+When **Common Servers** is off (independent servers), each server's bar is now always rendered — even when no `Max Users` is set. Bars are drawn **proportionally** to each other (the server with the most users fills 100 %, others scale accordingly), giving a visual comparison without needing an absolute limit.
+
+### `N / ∞` Always Displayed
+
+The counter always shows the `/ ∞` separator when no user limit is set, both in the global counter and in each per-server row.
 
 ---
 
@@ -136,15 +179,6 @@ Both manual invitations and slots support a **Bundle ID** field:
 - Leave empty → Wizarr uses the default bundle
 - `1` → first bundle, `2` → second bundle, etc.
 
-The Load Bundles button (which never worked reliably) has been removed in favour of this simple numeric input.
-
-### Other Improvements
-
-- Display files moved to `display/default/` subfolder, making it easier to add custom display templates.
-- The `/display` route without a slot ID now returns a clear error message instead of generating an invitation: `⚠️ Missing slot ID. Use /display/1, /display/2, etc.`
-- The save button in Organizr now appears automatically when adding or removing a slot.
-- Emoji indicators on all status messages (✅ success, ❌ error, ⏳ loading).
-
 ---
 
 ## Features
@@ -153,9 +187,14 @@ The Load Bundles button (which never worked reliably) has been removed in favour
 - **Automatic Slots** — multiple independent invitation channels, each with a permanent URL
 - Automatic invite validation and recreation when settings change
 - Per-slot and global **user limit** enforcement
+- **Per-server user count** with independent or shared deduplication
+- **Next Expiry Display** — shows the next member expiration date on the public page (optional per slot)
+- **Deferred Count Cache** — slot user counts cached at a configurable interval to avoid live API calls on every page visit
+- **Interval Auto-Check** — automatically refreshes user data and slot caches on a configurable schedule
+- **Live Last Check indicator** — always-visible, ticks every second, shows trigger type
 - Server and library selection (per slot and manual)
 - Permission controls: Downloads, Live TV, Mobile Uploads, Plex Home
-- **Public display pages** with multi-language support
+- **Public display pages** with multi-language support (English, French, Spanish)
 - **Debug log** viewer and clear button
 - **Wizarr API Docs** quick-access links
 - Compatible with Organizr auto-translation
@@ -218,6 +257,8 @@ All generated files are stored in the Organizr data cache directory:
 |------|---------|
 | `wizarrinvite_slot_1.json` | Cached invite code for Slot #1 |
 | `wizarrinvite_slot_2.json` | Cached invite code for Slot #2 |
+| `wizarrinvite_users_cache.json` | Cached Wizarr user list (used by deferred slots and next-expiry) |
+| `wizarrinvite_count_cache.json` | Cached user counts per slot (deferred mode) |
 | `wizarrinvite_debug.log` | Plugin activity log (auto-rotated at 100 KB) |
 
 To force a new invite code for a slot, delete its `.json` file or click **Check / Recreate** on the slot card.
@@ -255,8 +296,21 @@ Each slot has the same permission fields as the manual invitation, plus:
 | Field | Description |
 |-------|-------------|
 | Label | Display name for the slot card |
-| Max Users | Maximum number of users before the invite is blocked |
-| Server Count | Number of servers sharing the same Plex account (used for deduplication) |
+| Min Organizr Group | Minimum group required to access this slot's display page |
+| Max Users | Maximum number of users before the invite is blocked (empty = ∞) |
+| Show User Count | Display the user counter on the public page and enforce the limit |
+| Show Next Expiry | Show the next member expiration date below the counter (empty = *"No upcoming expiration"*) |
+| Deferred Count Check | Use a cached user count instead of a live API call on each page visit |
+| Common Servers | Treat all selected servers as sharing the same Plex account (deduplicated). If off, each server is counted independently and the highest count is used |
+
+### User Check & Count Cache
+
+| Field | Description |
+|-------|-------------|
+| Cache Interval Auto-Check | Enable/disable automatic user refresh at the configured interval |
+| Cache Hours / Minutes | How often the auto-check should run |
+| Smart Check | Force a live count when the cached count is within a threshold of the max users limit |
+| Smart Threshold | Number of users below the limit at which a smart live check is triggered |
 
 ---
 
@@ -273,7 +327,7 @@ Each slot has the same permission fields as the manual invitation, plus:
 
 Katsugami
 
-AI development assistance: ChatGPT (v1.0) — Claude by Anthropic (v2.0)
+AI development assistance: ChatGPT (v1.0) — Claude by Anthropic (v2.0 — v2.1)
 
 The project structure, integration, testing, and assembly were performed by Katsugami.
 

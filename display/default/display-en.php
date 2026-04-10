@@ -264,26 +264,32 @@ function renderUserCounter(stats) {
 	var hasPerServer   = perSrvKeys.length > 0;
 
 	if (hasPerServer && !commonSrv) {
-		// ── Serveurs indépendants : afficher chaque serveur séparément ────────
+		// ── Independent servers: display each server separately ────────
 		var ucLabel = document.querySelector(".user-counter-label");
 		if (ucLabel) ucLabel.textContent = "Members per server";
 
+		// When no max_users, bars are proportional to each other
+		var maxSrvCount = 0;
+		perSrvKeys.forEach(function(k) { if (perSrvCounts[k] > maxSrvCount) maxSrvCount = perSrvCounts[k]; });
+
 		var rows = "";
 		perSrvKeys.forEach(function(name) {
-			var c   = perSrvCounts[name];
-			var pct = (max && !unavailable) ? Math.min(100, Math.round(c / max * 100)) : 0;
-			var cls = pct >= 100 ? " full" : pct >= 80 ? " warn" : "";
+			var c = perSrvCounts[name];
+			var pct, cls;
+			if (max !== null && !unavailable) {
+				pct = Math.min(100, Math.round(c / max * 100));
+				cls = pct >= 100 ? " full" : pct >= 80 ? " warn" : "";
+			} else {
+				pct = maxSrvCount > 0 ? Math.round(c / maxSrvCount * 100) : 100;
+				cls = "";
+			}
 			rows += "<div style='margin-bottom:8px;'>";
 			rows += "<div style='font-size:12px; font-weight:700; margin-bottom:3px;'>" + escapeHtml(name) + "</div>";
 			rows += "<div class='user-counter-numbers'>";
 			rows += "<span class='uc-current'>" + (unavailable ? "-" : c) + "</span>";
-			if (max !== null) {
-				rows += "<span class='uc-sep'> / </span><span class='uc-max'>" + max + "</span>";
-			}
+			rows += "<span class='uc-sep'> / </span><span class='uc-max'>" + (max !== null ? max : "∞") + "</span>";
 			rows += "</div>";
-			if (max !== null) {
-				rows += "<div class='user-bar'><div class='user-bar-fill" + cls + "' style='width:" + pct + "%'></div></div>";
-			}
+			rows += "<div class='user-bar'><div class='user-bar-fill" + cls + "' style='width:" + pct + "%'></div></div>";
 			rows += "</div>";
 		});
 
@@ -312,28 +318,31 @@ function renderUserCounter(stats) {
 
 	var nextEl = document.getElementById("uc-next");
 	nextEl.style.color = "";
+	nextEl.textContent = "";
 
-	if (stats.limit_reached) {
-		var msg = "Maximum number of members reached.";
-		if (stats.next_expiry) {
-			var days2 = daysUntil(stats.next_expiry);
-			var dateStr2 = formatDate(stats.next_expiry);
-			msg += days2 !== null
-				? "\nNext available slot: " + dateStr2 + " (in " + days2 + " d)"
-				: "\nNext available slot: " + dateStr2;
+	if (stats.show_next_expiry) {
+		if (stats.limit_reached) {
+			var msg = "Maximum number of members reached.";
+			if (stats.next_expiry) {
+				var days2 = daysUntil(stats.next_expiry);
+				var dateStr2 = formatDate(stats.next_expiry);
+				msg += days2 !== null
+					? "\nNext available slot: " + dateStr2 + " (in " + days2 + " d)"
+					: "\nNext available slot: " + dateStr2;
+			} else {
+				msg += "\nPlease wait for a member to lose access.";
+			}
+			nextEl.textContent = msg;
+			nextEl.style.color = "var(--danger)";
+		} else if (stats.next_expiry) {
+			var days3 = daysUntil(stats.next_expiry);
+			var dateStr3 = formatDate(stats.next_expiry);
+			nextEl.textContent = days3 !== null
+				? "Next departure: " + dateStr3 + " (in " + days3 + " d)"
+				: "Next departure: " + dateStr3;
 		} else {
-			msg += "\nPlease wait for a member to lose access.";
+			nextEl.textContent = "No upcoming expiration";
 		}
-		nextEl.textContent = msg;
-		nextEl.style.color = "var(--danger)";
-	} else if (stats.next_expiry) {
-		var days3 = daysUntil(stats.next_expiry);
-		var dateStr3 = formatDate(stats.next_expiry);
-		nextEl.textContent = days3 !== null
-			? "Next departure: " + dateStr3 + " (in " + days3 + " d)"
-			: "Next departure: " + dateStr3;
-	} else {
-		nextEl.textContent = "No upcoming expiry";
 	}
 
 	counter.style.display = "";

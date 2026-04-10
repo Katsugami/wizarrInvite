@@ -58,6 +58,7 @@ function wizarrinviteCollectSlotData(slotId) {
 		allow_live_tv:        $('#wizarr-slot-' + slotId + '-allow-live-tv').is(':checked'),
 		allow_mobile_uploads: $('#wizarr-slot-' + slotId + '-allow-mobile-uploads').is(':checked'),
 		show_user_count:      $('#wizarr-slot-' + slotId + '-show-user-count').is(':checked'),
+		show_next_expiry:     $('#wizarr-slot-' + slotId + '-show-next-expiry').is(':checked'),
 		deferred_count:       $('#wizarr-slot-' + slotId + '-deferred-count').is(':checked'),
 		common_servers:       $('#wizarr-slot-' + slotId + '-common-servers').is(':checked'),
 	};
@@ -105,6 +106,8 @@ function wizarrinviteRenderSlot(slot) {
 	var bundleId      = String(slot.bundle_id    || '');
 	// show_user_count absent sur les anciens slots → true (rétrocompatibilité)
 	var showUserCount  = (slot.show_user_count  !== undefined) ? !!slot.show_user_count  : true;
+	// show_next_expiry absent sur les anciens slots → false
+	var showNextExpiry = (slot.show_next_expiry !== undefined) ? !!slot.show_next_expiry : false;
 	// deferred_count absent sur les anciens slots → false
 	var deferredCount  = (slot.deferred_count   !== undefined) ? !!slot.deferred_count   : false;
 	// common_servers absent sur les anciens slots → false
@@ -200,7 +203,19 @@ function wizarrinviteRenderSlot(slot) {
 				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Display user count on the invite page and enforce the max limit.</div>' +
 			'</div>' +
 
-			// Deferred Count Check (standalone row, below Show User Count)
+			// Show Next Expiry (standalone row, below Show User Count)
+			'<div style="margin-bottom:10px;">' +
+				'<label class="wz-toggle">' +
+					'<input type="checkbox" id="wizarr-slot-' + id + '-show-next-expiry" ' +
+						'class="wizarr-slot-field" data-slot-id="' + id + '" ' +
+						(showNextExpiry ? 'checked' : '') + '>' +
+					'<span class="wz-toggle-track"></span>' +
+					'<span>Show Next Expiry</span>' +
+				'</label>' +
+				'<div style="margin-top:3px; font-size:11px; opacity:.6;">Display the next member expiration date below the user counter. Shows "No upcoming expiration" if all members have permanent access.</div>' +
+			'</div>' +
+
+			// Deferred Count Check (standalone row, below Show Next Expiry)
 			'<div style="margin-bottom:10px;">' +
 				'<label class="wz-toggle">' +
 					'<input type="checkbox" id="wizarr-slot-' + id + '-deferred-count" ' +
@@ -336,6 +351,7 @@ $(document).on('click.wizarrinvite', '#wizarrinvite-add-slot-btn', function (e) 
 		server_ids:           '',
 		library_ids:          '',
 		show_user_count:      true,
+		show_next_expiry:     false,
 		deferred_count:       false,
 		common_servers:       false,
 		allow_downloads:      false,

@@ -1,21 +1,22 @@
 <?php
 
 $GLOBALS['plugins']['WizarrInvite'] = [
-	'name' => 'Wizarr Invite',
-	'author' => 'Katsugami',
-	'category' => 'Management',
-	'link' => '',
-	'license' => 'personal',
-	'idPrefix' => 'WIZARRINVITE',
+	'name'         => 'Wizarr Invite',
+	'author'       => 'Katsugami',
+	'category'     => 'Management',
+	'link'         => '',
+	'license'      => 'personal',
+	'idPrefix'     => 'WIZARRINVITE',
 	'configPrefix' => 'WIZARRINVITE',
-	'version' => '2.0.0',
-	'image' => file_exists(dirname(__DIR__, 3) . '/data/plugins/' . basename(__DIR__) . '/wizarr.png')
+	'version'      => '2.1.0',
+	'description'  => 'Automatic Wizarr invitation management with multi-slot support, per-server user counting, deferred cache, next-expiry display, and interval auto-check.',
+	'image'        => file_exists(dirname(__DIR__, 3) . '/data/plugins/' . basename(__DIR__) . '/wizarr.png')
 		? '/data/plugins/' . basename(__DIR__) . '/wizarr.png'
 		: '/api/plugins/' . basename(__DIR__) . '/wizarr.png',
-	'settings' => true,
-	'bind' => true,
-	'api' => 'api/v2/plugins/wizarrinvite/settings',
-	'homepage' => false
+	'settings'     => true,
+	'bind'         => true,
+	'api'          => 'api/v2/plugins/wizarrinvite/settings',
+	'homepage'     => false
 ];
 
 class WizarrInvite extends Organizr
@@ -286,12 +287,23 @@ class WizarrInvite extends Organizr
 					',
 				],
 
-				// ── Col 1 : Deferred Count Cache description ──────────────────
+				// ── Col 1 : Cache Interval + Auto-check toggle ───────────────
 				[
 					'type'  => 'html',
 					'label' => 'Cache Interval',
 					'html'  => '
-						<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.45; margin-bottom:8px;">Deferred Count Cache</div>
+						<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.45; margin-bottom:8px;">Cache Interval Auto-Check</div>
+						<div style="margin-bottom:10px;">
+							<label class="wz-toggle">
+								<input type="checkbox" id="wizarrinvite-autorefresh-cb">
+								<span class="wz-toggle-track"></span>
+								<span>Enable auto-check at interval</span>
+							</label>
+							<div style="font-size:11px; opacity:.6; margin-top:5px; line-height:1.5;">
+								When enabled, runs a full user check at each interval defined below.<br>
+								Fetches fresh data from Wizarr and refreshes all slot count caches.
+							</div>
+						</div>
 						<p style="font-size:12px; opacity:.7; margin-bottom:6px;">
 							When <strong>Deferred Count Check</strong> is enabled on a slot, the user count is cached
 							and only refreshed after this interval. Set both to <strong>0</strong> for the 1-minute minimum.
@@ -363,15 +375,8 @@ class WizarrInvite extends Organizr
 							<span>🕐 <strong id="wizarrinvite-local-time">—</strong></span>
 							<span style="opacity:.4;">|</span>
 							<span>Interval: <strong id="wizarrinvite-cache-interval">' . $cacheHours . 'h ' . $cacheMins . 'min</strong></span>
-							<span style="opacity:.4;">|</span>
-							<label class="wz-toggle" style="vertical-align:middle; margin:0;">
-								<input type="checkbox" id="wizarrinvite-autorefresh-cb">
-								<span class="wz-toggle-track"></span>
-								<span style="font-size:11px;">Auto-refresh</span>
-							</label>
-							<span id="wizarrinvite-cache-status-refresh" style="font-size:16px; opacity:.45; cursor:pointer; line-height:1;" title="Force refresh now">⟳</span>
+							<span id="wizarrinvite-cache-status-refresh" style="font-size:16px; opacity:.45; cursor:pointer; line-height:1; margin-left:4px;" title="Force refresh now">⟳</span>
 						</p>
-						<div id="wizarrinvite-last-user-check" style="font-size:11px; opacity:.6; margin-bottom:6px; min-height:15px;"></div>
 						<div id="wizarrinvite-cache-status-table">
 							<table style="width:100%; font-size:11px; border-collapse:collapse;">
 								<thead>
