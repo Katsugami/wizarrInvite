@@ -13,6 +13,9 @@ require_once __DIR__ . '/includes/helpers.php';
 // Cache JSON local (dépend de helpers)
 require_once __DIR__ . '/includes/cache.php';
 
+// Plex Home users (manual entries for accounts invisible to Wizarr API)
+require_once __DIR__ . '/includes/plex_home.php';
+
 // Logs de debug (dépend de cache pour wizarrinvite_cache_dir)
 require_once __DIR__ . '/includes/debug.php';
 

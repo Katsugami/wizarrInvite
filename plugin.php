@@ -1,21 +1,22 @@
 <?php
 
 $GLOBALS['plugins']['WizarrInvite'] = [
-	'name' => 'Wizarr Invite',
-	'author' => 'Katsugami',
-	'category' => 'Management',
-	'link' => '',
-	'license' => 'personal',
-	'idPrefix' => 'WIZARRINVITE',
+	'name'         => 'Wizarr Invite',
+	'author'       => 'Katsugami',
+	'category'     => 'Management',
+	'link'         => '',
+	'license'      => 'personal',
+	'idPrefix'     => 'WIZARRINVITE',
 	'configPrefix' => 'WIZARRINVITE',
-	'version' => '2.0.0',
-	'image' => file_exists(dirname(__DIR__, 3) . '/data/plugins/' . basename(__DIR__) . '/wizarr.png')
+	'version'      => '2.1.0',
+	'description'  => 'Automatic Wizarr invitation management with multi-slot support, per-server user counting, deferred cache, next-expiry display, and interval auto-check.',
+	'image'        => file_exists(dirname(__DIR__, 3) . '/data/plugins/' . basename(__DIR__) . '/wizarr.png')
 		? '/data/plugins/' . basename(__DIR__) . '/wizarr.png'
 		: '/api/plugins/' . basename(__DIR__) . '/wizarr.png',
-	'settings' => true,
-	'bind' => true,
-	'api' => 'api/v2/plugins/wizarrinvite/settings',
-	'homepage' => false
+	'settings'     => true,
+	'bind'         => true,
+	'api'          => 'api/v2/plugins/wizarrinvite/settings',
+	'homepage'     => false
 ];
 
 class WizarrInvite extends Organizr
@@ -28,6 +29,10 @@ class WizarrInvite extends Organizr
 
 		// Compatibilité : lecture du nouvel emplacement, fallback sur l'ancien
 		$minGroup = (string)($this->config['WIZARRINVITE-manual-min-group'] ?? $this->config['WIZARRINVITE-min-group'] ?? '2');
+
+		// ── Données pour l'onglet User Count & Cache ──────────────────────────
+		$cacheHours  = max(0, (int)($this->config['WIZARRINVITE-count-cache-hours']   ?? 24));
+		$cacheMins   = max(0, (int)($this->config['WIZARRINVITE-count-cache-minutes'] ?? 0));
 
 		return [
 			'Wizarr Connection' => [
@@ -52,6 +57,13 @@ class WizarrInvite extends Organizr
 					'placeholder' => 'https://invite.yourdomain.com'
 				],
 				[
+					'type'        => 'text',
+					'name'        => 'WIZARRINVITE-timezone',
+					'label'       => 'Timezone',
+					'value'       => $this->config['WIZARRINVITE-timezone'] ?? '',
+					'placeholder' => 'Europe/Paris',
+				],
+				[
 					'type' => 'html',
 					'label' => 'Connection Test',
 					'html' => '
@@ -59,14 +71,6 @@ class WizarrInvite extends Organizr
 						<div id="wizarrinvite-test-result" style="margin-top:10px;"></div>
 					'
 				],
-				[
-					'type' => 'html',
-					'label' => 'Users Check',
-					'html' => '
-						<button type="button" id="wizarrinvite-check-users-btn" class="btn btn-info">Check Users</button>
-						<div id="wizarrinvite-users-result" style="margin-top:10px; font-size:13px; line-height:1.6;"></div>
-					'
-				]
 			],
 
 			'Manual Invitation' => [
@@ -167,14 +171,14 @@ class WizarrInvite extends Organizr
 									<input type="checkbox" name="WIZARRINVITE-manual-allow-mobile-uploads" value="1"'
 										. (!empty($this->config['WIZARRINVITE-manual-allow-mobile-uploads']) ? ' checked' : '') . '>
 									<span class="wz-toggle-track"></span>
-									<span>Allow Mobile Uploads</span>
+									<span>Allow Mobile Uploads <span style="opacity:.5; font-size:10px;">(Plex only)</span></span>
 								</label>
 								<label class="wz-toggle">
 									<input type="hidden"   name="WIZARRINVITE-manual-invite-to-plex-home" value="">
 									<input type="checkbox" name="WIZARRINVITE-manual-invite-to-plex-home" value="1"'
 										. (!empty($this->config['WIZARRINVITE-manual-invite-to-plex-home']) ? ' checked' : '') . '>
 									<span class="wz-toggle-track"></span>
-									<span>Invite to Plex Home</span>
+									<span>Invite to Plex Home <span style="opacity:.5; font-size:10px;">(Plex only)</span></span>
 								</label>
 							</div>
 							<div>
@@ -235,6 +239,165 @@ class WizarrInvite extends Organizr
 						</div>
 					'
 				]
+			],
+
+			'User Check & Count Cache' => [
+
+				// ── Col 1 : Live User Check ───────────────────────────────────
+				[
+					'type'  => 'html',
+					'label' => 'Live User Check',
+					'html'  => '
+						<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.45; margin-bottom:8px;">Live User Check</div>
+						<p style="font-size:12px; opacity:.7; margin-bottom:8px;">
+							Queries Wizarr <code>/api/users</code> — returns the list of users Wizarr already manages.<br>
+							The result is automatically cached to speed up slots (deferred mode).
+						</p>
+						<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+							<button type="button" id="wizarrinvite-check-users-btn" class="btn btn-info">Check Users</button>
+							<button type="button" id="wizarrinvite-show-cache-btn" class="btn btn-default" style="font-size:12px;">Show Cache</button>
+							<button type="button" id="wizarrinvite-clear-users-cache-btn" class="btn btn-default" style="font-size:12px;">Clear users cache</button>
+						</div>
+						<div id="wizarrinvite-last-check-info" style="margin-top:4px; font-size:11px; opacity:.6; min-height:16px;"></div>
+						<div id="wizarrinvite-users-result" style="margin-top:8px; font-size:13px; line-height:1.6;"></div>
+					',
+				],
+
+				// ── Col 2 : Plex Home Users ───────────────────────────────────
+				[
+					'type'  => 'html',
+					'label' => 'Plex Home Users',
+					'html'  => '
+						<details id="wizarrinvite-plex-home-details" style="background:rgba(255,255,255,.03); border-radius:8px; padding:10px 14px;">
+							<summary style="font-size:12px; font-weight:700; cursor:pointer; user-select:none; list-style:none; display:flex; justify-content:space-between; align-items:center;">
+								<span>Plex Home Users <span style="font-size:10px; opacity:.5; font-weight:400;">(manually declared — Plex only)</span></span>
+								<span style="font-size:11px; opacity:.5;">▾</span>
+							</summary>
+							<div style="margin-top:10px; font-size:12px; opacity:.7; margin-bottom:8px;">
+								Declare Plex Home / local accounts that Wizarr cannot see via API.<br>
+								These are counted alongside API users — stored separately (not erased by "Clear users cache").
+							</div>
+							<div id="wizarrinvite-plex-home-list" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;">
+								<div style="opacity:.5; font-size:12px;">⏳ Loading…</div>
+							</div>
+							<button type="button" id="wizarrinvite-plex-home-add-btn" class="btn btn-success btn-sm" style="margin-right:6px;">+ Add User</button>
+							<button type="button" id="wizarrinvite-plex-home-save-btn" class="btn btn-primary btn-sm">Save</button>
+							<span id="wizarrinvite-plex-home-result" style="margin-left:8px; font-size:12px; opacity:.8;"></span>
+						</details>
+					',
+				],
+
+				// ── Col 1 : Cache Interval + Auto-check toggle ───────────────
+				[
+					'type'  => 'html',
+					'label' => 'Cache Interval',
+					'html'  => '
+						<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.45; margin-bottom:8px;">Cache Interval Auto-Check</div>
+						<div style="margin-bottom:10px;">
+							<label class="wz-toggle">
+								<input type="checkbox" id="wizarrinvite-autorefresh-cb">
+								<span class="wz-toggle-track"></span>
+								<span>Enable auto-check at interval</span>
+							</label>
+							<div style="font-size:11px; opacity:.6; margin-top:5px; line-height:1.5;">
+								When enabled, runs a full user check at each interval defined below.<br>
+								Fetches fresh data from Wizarr and refreshes all slot count caches.
+							</div>
+						</div>
+						<p style="font-size:12px; opacity:.7; margin-bottom:6px;">
+							When <strong>Deferred Count Check</strong> is enabled on a slot, the user count is cached
+							and only refreshed after this interval. Set both to <strong>0</strong> for the 1-minute minimum.
+						</p>
+						<p style="font-size:11px; color:#f87171; margin-bottom:0;">
+							⚠️ Values under 2 minutes will slow down Organizr — each check queries the Wizarr API.
+						</p>
+					',
+				],
+
+				// ── Col 2 : Smart Check ───────────────────────────────────────
+				[
+					'type'  => 'html',
+					'label' => 'Smart Check',
+					'html'  => '
+						<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.45; margin-bottom:8px;">Smart Check</div>
+						<div>
+							<!-- Hidden input ensures a value is always submitted even when unchecked -->
+							<input type="hidden" id="WIZARRINVITE-smart-check-enabled" name="WIZARRINVITE-smart-check-enabled"
+							       value="' . (empty($this->config['WIZARRINVITE-smart-check-enabled']) ? '0' : '1') . '">
+							<label class="wz-toggle">
+								<input type="checkbox" id="wizarrinvite-smart-check-toggle"
+								       ' . (!empty($this->config['WIZARRINVITE-smart-check-enabled']) ? 'checked' : '') . '>
+								<span class="wz-toggle-track"></span>
+								<span>Enable Smart Check</span>
+							</label>
+							<div style="margin-top:5px; font-size:11px; opacity:.6;">
+								When deferred mode is active, forces a live check if the cached count is within
+								<em>threshold</em> spots of the limit — prevents creating an invite when the server is full.
+							</div>
+						</div>
+					',
+				],
+
+				// ── Col 1 : Cache Hours ───────────────────────────────────────
+				[
+					'type'        => 'text',
+					'name'        => 'WIZARRINVITE-count-cache-hours',
+					'label'       => 'Cache Hours',
+					'value'       => $this->config['WIZARRINVITE-count-cache-hours'] ?? '0',
+					'placeholder' => '0',
+				],
+
+				// ── Col 2 : Smart Check Threshold ────────────────────────────
+				[
+					'type'        => 'text',
+					'name'        => 'WIZARRINVITE-smart-check-threshold',
+					'label'       => 'Smart Check Threshold',
+					'value'       => $this->config['WIZARRINVITE-smart-check-threshold'] ?? '5',
+					'placeholder' => '5',
+				],
+
+				// ── Col 1 : Cache Minutes ─────────────────────────────────────
+				[
+					'type'        => 'text',
+					'name'        => 'WIZARRINVITE-count-cache-minutes',
+					'label'       => 'Cache Minutes',
+					'value'       => $this->config['WIZARRINVITE-count-cache-minutes'] ?? '15',
+					'placeholder' => '15',
+				],
+
+				// ── Col 2 : Cache Status ──────────────────────────────────────
+				[
+					'type'  => 'html',
+					'label' => 'Cache Status',
+					'html'  => '
+						<div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; opacity:.45; margin-bottom:8px;">Cache Status</div>
+						<p style="font-size:11px; opacity:.7; margin-bottom:6px; display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
+							<span>🕐 <strong id="wizarrinvite-local-time">—</strong></span>
+							<span style="opacity:.4;">|</span>
+							<span>Interval: <strong id="wizarrinvite-cache-interval">' . $cacheHours . 'h ' . $cacheMins . 'min</strong></span>
+							<span id="wizarrinvite-cache-status-refresh" style="font-size:16px; opacity:.45; cursor:pointer; line-height:1; margin-left:4px;" title="Force refresh now">⟳</span>
+						</p>
+						<div id="wizarrinvite-cache-status-table">
+							<table style="width:100%; font-size:11px; border-collapse:collapse;">
+								<thead>
+									<tr style="opacity:.5; text-align:left;">
+										<th style="padding:3px 6px;">Slot</th>
+										<th style="padding:3px 6px;">Cached count</th>
+									</tr>
+								</thead>
+								<tbody id="wizarrinvite-cache-status-tbody">
+									<tr><td colspan="2" style="opacity:.5; padding:4px 6px;">Loading…</td></tr>
+								</tbody>
+							</table>
+						</div>
+						<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+							<button type="button" id="wizarrinvite-clear-count-cache-btn" class="btn btn-danger btn-sm">
+								Clear Count Cache
+							</button>
+							<span id="wizarrinvite-clear-count-cache-result" style="font-size:12px; opacity:.8;"></span>
+						</div>
+					',
+				],
 			],
 
 			'Info' => [
@@ -318,6 +481,9 @@ class WizarrInvite extends Organizr
 							<button type="button" id="wizarrinvite-debug-refresh-btn" class="btn btn-info btn-sm">Refresh</button>
 							<button type="button" id="wizarrinvite-debug-clear-btn" class="btn btn-danger btn-sm">Clear Logs</button>
 							<span id="wizarrinvite-debug-status" style="font-size:12px; opacity:.7;"></span>
+						</div>
+						<div style="font-size:11px; opacity:.5; margin-bottom:6px;">
+							Deferred count live checks appear as: <code>Deferred count live check — slot #N (reason): X users</code>
 						</div>
 						<div id="wizarrinvite-debug-log" style="
 							font-family:monospace; font-size:11px; line-height:1.6;

@@ -23,8 +23,9 @@
  */
 function wizarrinvite_request($baseUrl, $apiKey, $method, $endpoint, $payload = null, $timeout = 10)
 {
-    $url            = rtrim($baseUrl, '/') . '/api/' . ltrim($endpoint, '/');
-    $connectTimeout = min(5, max(1, $timeout - 1));
+    $url = rtrim($baseUrl, '/') . '/api/' . ltrim($endpoint, '/');
+    // timeout=0 → attente illimitée. connectTimeout toujours plafonné à 10 s.
+    $connectTimeout = ($timeout === 0) ? 10 : min(5, max(1, $timeout - 1));
 
     $headers = [
         'Accept: application/json',
@@ -39,6 +40,10 @@ function wizarrinvite_request($baseUrl, $apiKey, $method, $endpoint, $payload = 
         CURLOPT_HTTPHEADER     => $headers,
         CURLOPT_TIMEOUT        => $timeout,
         CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 3,
     ]);
 
     if ($payload !== null) {

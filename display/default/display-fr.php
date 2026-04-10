@@ -503,44 +503,96 @@ function copyText(text, feedbackId) {
 function renderUserCounter(stats) {
 	var counter = document.getElementById("user-counter");
 	if (!stats || !counter) return;
+	// show_user_count désactivé sur ce slot — masquer le compteur
+	if (stats.show_user_count === false) return;
 
-	var unavailable = (stats.count === null || stats.count === undefined || !!stats.unavailable);
-	var count = unavailable ? 0 : stats.count;
-	var max = (stats.max !== null && stats.max !== undefined) ? stats.max : null;
-	var pct = (max && !unavailable) ? Math.min(100, Math.round(count / max * 100)) : 0;
+	var unavailable    = (stats.count === null || stats.count === undefined || !!stats.unavailable);
+	var count          = unavailable ? 0 : stats.count;
+	var max            = (stats.max !== null && stats.max !== undefined) ? stats.max : null;
+	var perSrvCounts   = stats.per_server_counts || {};
+	var perSrvKeys     = Object.keys(perSrvCounts);
+	var commonSrv      = !!stats.common_servers;
+	var srvNames       = stats.server_names || [];
+	var hasPerServer   = perSrvKeys.length > 0;
 
-	document.getElementById("uc-current").textContent = unavailable ? "-" : count;
-	document.getElementById("uc-max").textContent     = max !== null ? max : "?";
+	if (hasPerServer && !commonSrv) {
+		// ── Serveurs indépendants : afficher chaque serveur séparément ────────
+		var ucLabel = document.querySelector(".user-counter-label");
+		if (ucLabel) ucLabel.textContent = "Membres par serveur";
 
-	var bar = document.getElementById("uc-bar");
-	bar.style.width = pct + "%";
-	bar.className   = "user-bar-fill" + (pct >= 100 ? " full" : pct >= 80 ? " warn" : "");
+		// Quand pas de max_users, les barres sont proportionnelles entre elles
+		var maxSrvCount = 0;
+		perSrvKeys.forEach(function(k) { if (perSrvCounts[k] > maxSrvCount) maxSrvCount = perSrvCounts[k]; });
+
+		var rows = "";
+		perSrvKeys.forEach(function(name) {
+			var c = perSrvCounts[name];
+			var pct, cls;
+			if (max !== null && !unavailable) {
+				pct = Math.min(100, Math.round(c / max * 100));
+				cls = pct >= 100 ? " full" : pct >= 80 ? " warn" : "";
+			} else {
+				pct = maxSrvCount > 0 ? Math.round(c / maxSrvCount * 100) : 100;
+				cls = "";
+			}
+			rows += "<div style=\'margin-bottom:8px;\'>";
+			rows += "<div style=\'font-size:12px; font-weight:700; margin-bottom:3px;\'>" + escapeHtml(name) + "</div>";
+			rows += "<div class=\'user-counter-numbers\'>";
+			rows += "<span class=\'uc-current\'>" + (unavailable ? "-" : c) + "</span>";
+			rows += "<span class=\'uc-sep\'> / </span><span class=\'uc-max\'>" + (max !== null ? max : "∞") + "</span>";
+			rows += "</div>";
+			rows += "<div class=\'user-bar\'><div class=\'user-bar-fill" + cls + "\' style=\'width:" + pct + "%\'></div></div>";
+			rows += "</div>";
+		});
+
+		var numbersEl = document.querySelector(".user-counter-numbers");
+		var barEl     = document.querySelector(".user-bar");
+		if (numbersEl) numbersEl.outerHTML = rows;
+		if (barEl)     barEl.remove();
+
+	} else {
+		var pct = (max && !unavailable) ? Math.min(100, Math.round(count / max * 100)) : 0;
+
+		if (hasPerServer && commonSrv && srvNames.length > 1) {
+			var ucLabel2 = document.querySelector(".user-counter-label");
+			if (ucLabel2) ucLabel2.textContent = srvNames.join(", ");
+		}
+
+		document.getElementById("uc-current").textContent = unavailable ? "-" : count;
+		document.getElementById("uc-max").textContent     = max !== null ? max : "∞";
+
+		var bar = document.getElementById("uc-bar");
+		bar.style.width = pct + "%";
+		bar.className   = "user-bar-fill" + (pct >= 100 ? " full" : pct >= 80 ? " warn" : "");
+	}
 
 	var nextEl = document.getElementById("uc-next");
 	nextEl.style.color = "";
+	nextEl.textContent = "";
 
-	if (stats.limit_reached) {
-		/* Limite atteinte : message dédié + prochaine libération */
-		var msg = "Nombre maximum de membres atteint.";
-		if (stats.next_expiry) {
-			var days = daysUntil(stats.next_expiry);
-			var dateStr = formatDate(stats.next_expiry);
-			msg += days !== null
-				? "\nProchaine libération : " + dateStr + " (dans " + days + " j)"
-				: "\nProchaine libération : " + dateStr;
+	if (stats.show_next_expiry) {
+		if (stats.limit_reached) {
+			var msg = "Nombre maximum de membres atteint.";
+			if (stats.next_expiry) {
+				var days2 = daysUntil(stats.next_expiry);
+				var dateStr2 = formatDate(stats.next_expiry);
+				msg += days2 !== null
+					? "\nProchaine libération : " + dateStr2 + " (dans " + days2 + " j)"
+					: "\nProchaine libération : " + dateStr2;
+			} else {
+				msg += "\nMerci d\'attendre qu\'un membre perde son acc\u00e8s.";
+			}
+			nextEl.textContent = msg;
+			nextEl.style.color = "var(--danger)";
+		} else if (stats.next_expiry) {
+			var days3 = daysUntil(stats.next_expiry);
+			var dateStr3 = formatDate(stats.next_expiry);
+			nextEl.textContent = days3 !== null
+				? "Prochain départ : " + dateStr3 + " (dans " + days3 + " j)"
+				: "Prochain départ : " + dateStr3;
 		} else {
-			msg += "\nMerci d\'attendre qu\'un membre perde son acc\u00e8s.";
+			nextEl.textContent = "Aucune expiration à venir";
 		}
-		nextEl.textContent = msg;
-		nextEl.style.color = "var(--danger)";
-	} else if (stats.next_expiry) {
-		var days = daysUntil(stats.next_expiry);
-		var dateStr = formatDate(stats.next_expiry);
-		nextEl.textContent = days !== null
-			? "Prochain départ : " + dateStr + " (dans " + days + " j)"
-			: "Prochain départ : " + dateStr;
-	} else {
-		nextEl.textContent = "Aucune expiration à venir";
 	}
 
 	counter.style.display = "";
