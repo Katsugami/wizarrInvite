@@ -347,12 +347,20 @@ function wizarrinvite_slot_user_stats($cfg, $slotConfig)
         $limitReached = ($maxUsers !== null) && ($effectiveCountD !== null) && ($effectiveCountD >= $maxUsers);
 
         // Calcul next_expiry depuis le cache users si l'option est activée
+        // Filtrés sur les serveurs du slot (comme en mode live) pour ne pas
+        // afficher des expirations provenant de serveurs non concernés par ce slot.
         $nextExpiryD = null;
         if ($showNextExpiry) {
             $usersCache  = wizarrinvite_load_users_cache();
             $cachedUsers = $usersCache ? ($usersCache['users'] ?? []) : [];
             if (!empty($cachedUsers)) {
-                $nextExpiryD = wizarrinvite_find_next_expiry($cachedUsers);
+                if (!empty($serverNamesD)) {
+                    $expFiltered = wizarrinvite_filter_users_for_servers($cachedUsers, $serverNamesD);
+                    $usersForExpD = $expFiltered['users'];
+                } else {
+                    $usersForExpD = $cachedUsers;
+                }
+                $nextExpiryD = wizarrinvite_find_next_expiry($usersForExpD);
             }
         }
 
